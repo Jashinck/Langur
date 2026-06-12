@@ -1128,18 +1128,18 @@ public List<Tool> getToolsByNames(List<String> toolNames) {
 @Primary  // 覆盖内存实现，Spring 优先注入此实现
 public class JpaAgentRepository implements AgentRepository {
     @Autowired
-    private AgentJpaRepository springDataRepository;  // Spring Data JPA 自动实现
+    private AgentJpaRepository agentDataRepository;  // Spring Data JPA repository
 
     @Override
     public void save(Agent agent) {
         // 自动将 Domain 对象转换为数据库实体
         AgentDO agentDO = AgentDO.from(agent);
-        springDataRepository.save(agentDO);
+        agentDataRepository.save(agentDO);
     }
 
     @Override
     public Optional<Agent> findById(String id) {
-        return springDataRepository.findById(id)
+        return agentDataRepository.findById(id)
                 .map(AgentDO::toDomain);  // DO → Domain
     }
 }
@@ -1189,11 +1189,12 @@ public class AgentDO {
     private LocalDateTime createdTime;
     private LocalDateTime updatedTime;
     
-    @Convert(converter = JsonValueMapper.class)  // JSON 存储复杂对象
-    private String conversationHistory;
+    @Convert(converter = ConversationHistoryConverter.class)
+    private List<ConversationMessage> conversationHistory;  // 通过 converter 自动 JSON 序列化
     private Integer iterationCount;
     private String status;
-    private String configuration;  // Agent 配置信息
+    @Convert(converter = AgentConfigConverter.class)
+    private AgentConfig configuration;  // Agent 配置信息
 }
 
 @Entity
@@ -1206,12 +1207,12 @@ public class PlanDO {
     private LocalDateTime createTime;
     private LocalDateTime finishTime;
     
-    @Convert(converter = JsonValueMapper.class)
-    private String planSteps;  // 步骤数据序列化
+    @Convert(converter = PlanStepsConverter.class)
+    private List<PlanStep> planSteps;  // 通过 converter 自动序列化步骤列表
 }
 
 @Entity
-@Table(name = "t_agent_run_task", indexes = @Index(columnList = "agentId"))
+@Table(name = "t_agent_run_task", indexes = {@Index(columnList = "agentId")})
 public class AgentRunTaskDO {
     @Id
     private String id;
@@ -1228,51 +1229,60 @@ public class AgentRunTaskDO {
 
 #### 6.4.4 自动映射机制
 
-通过 `JsonValueMapper` 实现复杂对象的自动序列化/反序列化，保证 Domain 层与 DO 层的无缝转换：
+通过 `AttributeConverter` 实现复杂对象的自动序列化/反序列化，保证 Domain 层与 DO 层的无缝转换：
 
 ```java
-// 通用的 JSON 转换器（支持任意对象类型）
-@Converter
-public class JsonValueMapper<T> implements AttributeConverter<T, String> {
-    private final Class<T> targetClass;
-    
-    public JsonValueMapper(Class<T> targetClass) {
-        this.targetClass = targetClass;
-    }
+// 为 ConversationMessage 列表创建转换器
+@Converter(autoApply = false)
+public class ConversationHistoryConverter implements AttributeConverter<List<ConversationMessage>, String> {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public String convertToDatabaseColumn(T attribute) {
+    public String convertToDatabaseColumn(List<ConversationMessage> attribute) {
         if (attribute == null) return null;
-        // Domain 对象 → JSON String
-        return JsonUtils.toJson(attribute);
+        try {
+            // List<ConversationMessage> → JSON String
+            return objectMapper.writeValueAsString(attribute);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to convert conversation history to JSON", e);
+        }
     }
 
     @Override
-    public T convertToEntityAttribute(String dbData) {
+    public List<ConversationMessage> convertToEntityAttribute(String dbData) {
         if (dbData == null) return null;
-        // JSON String → Domain 对象
-        return JsonUtils.fromJson(dbData, targetClass);
+        try {
+            // JSON String → List<ConversationMessage>
+            return objectMapper.readValue(dbData, 
+                new TypeReference<List<ConversationMessage>>() {});
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to convert JSON to conversation history", e);
+        }
     }
 }
 
-// 在实体中使用转换器
-@Entity
-@Table(name = "t_agent")
-public class AgentDO {
-    @Id
-    private String id;
+// 为 PlanStep 列表创建转换器（类似模式）
+@Converter(autoApply = false)
+public class PlanStepsConverter implements AttributeConverter<List<PlanStep>, String> {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     
-    @Convert(converter = ConversationHistoryConverter.class)
-    private List<ConversationMessage> conversationHistory;
+    // 实现方式同 ConversationHistoryConverter，使用 TypeReference<List<PlanStep>>
 }
 
-// 为特定类型创建具体转换器
-@Converter
-public class ConversationHistoryConverter extends JsonValueMapper<List<ConversationMessage>> {
-    public ConversationHistoryConverter() {
-        super(new TypeReference<List<ConversationMessage>>(){}.getType());
-    }
+// 为 AgentConfig 创建转换器
+@Converter(autoApply = false)
+public class AgentConfigConverter implements AttributeConverter<AgentConfig, String> {
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    
+    // 实现方式同上，针对单个对象类型而非列表
 }
+```
+
+> **说明**：
+> - 每个 `AttributeConverter` 实现必须有**无参构造方法**（JPA 规范要求）
+> - `@Converter(autoApply = false)` 表示不自动应用，需在实体中显式指定 `@Convert(converter = ...)`
+> - 使用 `ObjectMapper`（Jackson）实现 JSON 序列化/反序列化
+> - `TypeReference` 用于处理泛型类型信息丢失的问题
 ```
 
 #### 6.4.5 动态切换存储实现
