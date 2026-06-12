@@ -138,10 +138,13 @@ public class AgentApplicationService {
         if (registeredToolNames.isEmpty()) {
             return agent;
         }
-        agent.getRegisteredToolNames().stream()
+        List<String> missingToolNames = registeredToolNames.stream()
                 .filter(name -> agent.getTools().stream().noneMatch(tool -> tool.getName().equals(name)))
-                .map(name -> toolRegistryService.getToolsByNames(List.of(name)))
-                .flatMap(List::stream)
+                .toList();
+        if (missingToolNames.isEmpty()) {
+            return agent;
+        }
+        toolRegistryService.getToolsByNames(missingToolNames).stream()
                 .forEach(agent::registerTool);
         return agent;
     }
