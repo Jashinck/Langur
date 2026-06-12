@@ -2,20 +2,25 @@ package org.skylark.langur.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.application.command.MessagePartInput;
 import org.skylark.langur.application.assembler.AgentAssembler;
 import org.skylark.langur.application.command.CreateAgentCommand;
 import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
+import org.skylark.langur.domain.model.message.MessagePartType;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.repository.AgentRepository;
+import org.skylark.langur.domain.repository.PlanRepository;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.domain.service.PlanningDomainService;
 import org.skylark.langur.interfaces.dto.AgentResponse;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Agent应用服务 - 编排领域对象，处理用例
@@ -30,6 +35,7 @@ public class AgentApplicationService {
     private final PlanningDomainService planningDomainService;
     private final ToolRegistryService toolRegistryService;
     private final AgentAssembler agentAssembler;
+    private final PlanRepository planRepository;
 
     public AgentResponse createAgent(CreateAgentCommand command) {
         AgentConfig config = AgentConfig.builder()
@@ -60,7 +66,8 @@ public class AgentApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException("Agent not found: " + command.getAgentId()));
 
         agent.markRunning();
-        agent.addUserMessage(command.getUserMessage());
+        String resolvedUserMessage = resolveUserMessage(command);
+        agent.addUserMessage(resolvedUserMessage);
         Plan plan = planningDomainService.createPlan(agent.getId().getValue());
 
         try {
@@ -74,10 +81,16 @@ public class AgentApplicationService {
         } catch (Exception e) {
             log.error("Agent execution failed", e);
             agent.markFailed(e.getMessage());
+        } finally {
+            planRepository.save(plan);
         }
 
         agentRepository.save(agent);
         return agentAssembler.toResponse(agent);
+    }
+
+    public Optional<Plan> getLatestPlan(String agentId) {
+        return planRepository.findByAgentId(agentId);
     }
 
     public AgentResponse getAgent(String agentId) {
@@ -94,5 +107,41 @@ public class AgentApplicationService {
 
     public void deleteAgent(String agentId) {
         agentRepository.delete(AgentId.of(agentId));
+        planRepository.delete(agentId);
+    }
+
+    private String resolveUserMessage(RunAgentCommand command) {
+        if (StringUtils.isNotBlank(command.getUserMessage())) {
+            return command.getUserMessage();
+        }
+
+        List<MessagePartInput> parts = command.getMessageParts();
+        if (parts == null || parts.isEmpty()) {
+            throw new IllegalArgumentException("userMessage or messageParts must be provided");
+        }
+
+        String merged = parts.stream()
+                .map(this::toTextLine)
+                .filter(StringUtils::isNotBlank)
+                .reduce((a, b) -> a + "\n" + b)
+                .orElse("");
+
+        if (StringUtils.isBlank(merged)) {
+            throw new IllegalArgumentException("messageParts did not produce any usable content");
+        }
+        return merged;
+    }
+
+    private String toTextLine(MessagePartInput part) {
+        MessagePartType type = part.getType() != null ? part.getType() : MessagePartType.TEXT;
+        if (type == MessagePartType.TEXT) {
+            return StringUtils.defaultString(part.getContent());
+        }
+
+        String payload = StringUtils.defaultIfBlank(part.getContent(), part.getMediaUrl());
+        if (StringUtils.isBlank(payload)) {
+            payload = "empty";
+        }
+        return "[" + type.name().toLowerCase() + "] " + payload;
     }
 }

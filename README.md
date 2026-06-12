@@ -12,8 +12,11 @@
 | 🔄 ReAct 循环 | Reasoning + Acting，最大迭代次数可配置 |
 | 🛠️ 工具调用 | 内置 HTTP 工具，支持自定义工具注册 |
 | 📋 多步规划 | PlanningDomainService 拆解复杂任务为步骤 |
+| 🧾 Plan 持久化 | 内置 PlanRepository，可查询最近一次执行计划 |
+| ⚙️ 异步执行任务 | 支持异步运行、任务状态查询与按 Agent 任务列表 |
 | 🤝 多 Agent 协作 | AgentId 隔离，支持跨 Agent 任务分发 |
 | 📡 REST API | 标准 HTTP 接口，便于集成任意前端或系统 |
+| 🧩 结构化消息输入 | 支持 `messageParts`（text/image/audio/video/file/structured-data） |
 
 ---
 
@@ -24,19 +27,21 @@ langur/
 ├── domain/                  # 核心领域
 │   ├── model/
 │   │   ├── agent/           # Agent 聚合根（Agent, AgentId, AgentConfig, AgentStatus）
+│   │   ├── execution/       # 执行任务模型（AgentRunTask, RunTaskStatus）
+│   │   ├── message/         # 消息类型模型（MessagePartType）
 │   │   ├── plan/            # 规划模型（Plan, PlanStep, StepStatus）
 │   │   └── tool/            # 工具定义（Tool, ToolDefinition, ToolResult）
 │   ├── service/             # 领域服务（AgentDomainService, PlanningDomainService）
-│   ├── repository/          # 仓储接口（AgentRepository, PlanRepository）
+│   ├── repository/          # 仓储接口（AgentRepository, PlanRepository, AgentRunTaskRepository）
 │   └── event/               # 领域事件（AgentCreatedEvent, AgentExecutedEvent）
 ├── application/             # 应用层
-│   ├── service/             # 用例（AgentApplicationService, ToolRegistryService）
-│   ├── command/             # 命令对象（CreateAgentCommand, RunAgentCommand）
+│   ├── service/             # 用例（AgentApplicationService, AgentRunTaskApplicationService, ToolRegistryService）
+│   ├── command/             # 命令对象（CreateAgentCommand, RunAgentCommand, MessagePartInput）
 │   └── assembler/           # DTO 转换
 ├── infrastructure/          # 基础设施层
 │   ├── llm/                 # LLM 适配器（LLMPort 接口 + OpenAI 实现）
 │   ├── tool/                # 内置工具（BuiltinToolRegistry, HttpCallTool）
-│   └── persistence/         # 内存持久化（InMemoryAgentRepository）
+│   └── persistence/         # 内存持久化（InMemoryAgentRepository, InMemoryPlanRepository, InMemoryAgentRunTaskRepository）
 └── interfaces/              # 接口层
     ├── rest/                # REST 控制器（AgentController）
     └── dto/                 # 请求/响应 DTO
@@ -92,12 +97,43 @@ Content-Type: application/json
 }
 ```
 
+也支持结构化消息输入（用于多模态演进的兼容入口）：
+
+```json
+{
+  "userId": "u-001",
+  "tenantId": "t-001",
+  "sessionId": "s-001",
+  "messageParts": [
+    {"type": "text", "content": "请分析这张图"},
+    {"type": "image", "mediaUrl": "https://example.com/demo.png"}
+  ]
+}
+```
+
+### 异步执行 Agent
+
+```http
+POST /api/agents/{agentId}/run/async
+Content-Type: application/json
+
+{
+  "userMessage": "帮我总结今天的工作项",
+  "userId": "u-001",
+  "tenantId": "t-001",
+  "sessionId": "s-001"
+}
+```
+
 ### 其他接口
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `GET` | `/api/agents` | 列出所有 Agent |
 | `GET` | `/api/agents/{id}` | 获取 Agent 详情 |
+| `GET` | `/api/agents/{id}/plan` | 获取最近一次执行计划 |
+| `GET` | `/api/agents/{id}/runs` | 获取该 Agent 的异步任务列表 |
+| `GET` | `/api/agents/runs/{taskId}` | 获取异步任务状态 |
 | `DELETE` | `/api/agents/{id}` | 删除 Agent |
 
 ---
