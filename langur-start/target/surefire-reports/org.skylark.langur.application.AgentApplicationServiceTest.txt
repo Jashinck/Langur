@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: org.skylark.langur.application.AgentApplicationServiceTest
 -------------------------------------------------------------------------------
-Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.042 s -- in org.skylark.langur.application.AgentApplicationServiceTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.549 s -- in org.skylark.langur.application.AgentApplicationServiceTest
