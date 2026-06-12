@@ -140,4 +140,4 @@ DDD 多模块拆分是地基，但真正拉开差距的是这套四阶段闭环�
 
 ---
 
-*Langur 项目地址：[https://github.com/Jashinck/Langur](https://github.com/Jashinck/Langur)*
+*项目仓库：访问 [Langur Agent Framework GitHub 仓库](https://github.com/Jashinck/Langur)*
