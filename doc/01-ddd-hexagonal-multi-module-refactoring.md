@@ -1,303 +1,143 @@
-# 从单模块到六边形架构：Langur Agent 框架的 DDD 多模块拆分实践
+# 从“能跑”到“可运营”：Langur 最新 MR 的四阶段 Agent 能力升级
 
 > **作者**：Jashinck  
-> **标签**：DDD / 六边形架构 / Spring Boot / AI Agent / 工程实践  
-> **适合读者**：有一定 Spring Boot 基础、对 DDD 或 AI 应用架构感兴趣的开发者
+> **标签**：AI Agent / ReAct / DDD / Spring Boot / 工程实践
 
 ---
 
-## 背景
+## 这次 MR 的核心，不只是 DDD
 
-Langur 是一个基于 Java / Spring Boot 的**通用 AI Agent 能力框架**，支持 ReAct 推理循环、工具调用、多步规划与多 Agent 协作，底层对接 OpenAI 兼容接口。
+上一版解读把重点放在了 DDD 多模块改造上，但最新 MR 的真正主线是：**Agent 能力从单次调用升级为“四阶段闭环”**，DDD 只是支撑这条主线的工程化手段。
 
-项目初始是一个单 Maven 模块，所有代码放在同一 `pom.xml` 下。随着业务功能不断增加，我们遇到了几个典型痛点：
+这四个阶段分别是：
 
-- **依赖方向混乱**：`LLMPort` 接口放在 `infrastructure` 包里，但领域层却要引用它，严重违背了六边形架构的"领域不依赖基础设施"原则。
-- **层间耦合**：应用层（Application）的 `AgentAssembler` 直接引用了接口层（Interfaces）的 DTO，形成了逆向依赖。
-- **异常语义模糊**：`getLatestPlan` 找不到 Plan 时抛 `AgentNotFoundException`，混淆了两个不同的业务概念。
-
-这次重构的核心目标：**用 DDD 六边形架构对项目进行多模块拆分，彻底厘清各层职责与依赖方向。**
-
----
-
-## 模块划分：六个模块，一条单向依赖链
-
-重构后，项目被拆分为六个 Maven 子模块：
-
-```
-langur-start (fat jar 启动入口)
-  ├── langur-api          → 依赖 langur-application
-  ├── langur-infrastructure → 依赖 langur-domain
-  └── (传递依赖)
-        langur-application → langur-domain → langur-common
-```
-
-| 模块 | 职责 | Spring 依赖 |
-|------|------|-------------|
-| `langur-common` | 异常体系、公共值对象，无任何框架依赖 | ❌ |
-| `langur-domain` | 聚合根、领域服务、端口接口（SPI） | ❌ |
-| `langur-application` | 应用服务、Command、应用层 DTO | ✅ |
-| `langur-api` | HTTP Controller、Request/Response DTO、API Assembler | ✅ |
-| `langur-infrastructure` | LLM 适配器、Repository 实现、工具注册 | ✅ |
-| `langur-start` | 主类、`application.yml`、打包配置 | ✅ |
-
-> **关键原则**：依赖箭头永远指向更内层，内层不感知外层的存在。
+1. **输入阶段（Input Normalization）**：统一结构化消息输入
+2. **规划阶段（Planning）**：把执行过程沉淀为可追踪 Plan
+3. **执行阶段（Reason + Act）**：稳定 ReAct 循环并记录每一步
+4. **运营阶段（Async + Observability）**：异步任务化运行与状态可观测
 
 ---
 
-## 核心设计详解
+## 阶段一：输入能力升级（支持 `messageParts`）
 
-### 1. 领域层：拥有端口契约（六边形架构精髓）
+在 `RunAgentRequest` 中，输入从单一 `userMessage` 扩展为：
 
-六边形架构最核心的一条规则是：**端口（Port）属于领域，而不是基础设施**。
+- `userMessage`（纯文本）
+- `messageParts`（结构化分片）
 
-在旧代码中，`LLMPort` 定义在 `infrastructure.llm` 包下，这意味着领域层要调用 LLM 时，必须依赖基础设施层——反向依赖。
+结构化类型由 `MessagePartType` 统一约束：
 
-重构后，`LLMPort` 和 `ToolProvider` 都移入 `langur-domain` 的 `domain.port` 包：
+- `TEXT`
+- `IMAGE`
+- `AUDIO`
+- `VIDEO`
+- `FILE`
+- `STRUCTURED_DATA`
 
-```java
-// langur-domain: domain/port/LLMPort.java
-public interface LLMPort {
-    LLMDecision decide(String systemPrompt,
-                       List<Map<String, String>> conversationHistory,
-                       List<Tool> availableTools);
+应用层 `AgentApplicationService#resolveUserMessage` 负责兜底合并逻辑：
 
-    String complete(String systemPrompt, String userMessage);
+- 优先使用 `userMessage`
+- 当 `userMessage` 为空时，按 `messageParts` 组装可用文本
+- 无有效内容直接抛错，避免空输入进入 Agent 循环
 
-    // 决策结果：工具调用 or 最终答案
-    class LLMDecision {
-        public static LLMDecision toolCall(String thought, String toolName, Map<String, Object> args) { ... }
-        public static LLMDecision finalAnswer(String answer) { ... }
-    }
-}
-```
-
-基础设施层的 `OpenAILLMAdapter` 实现这个接口，依赖方向变为：
-
-```
-infrastructure → domain (✅ 正确)
-domain → infrastructure (❌ 已消除)
-```
-
-同理，`ToolProvider` 端口由 `BuiltinToolRegistry` 在基础设施层实现，领域层只依赖接口。
+**价值**：Agent 的输入边界从“文本参数”升级为“标准化多模态消息入口”。
 
 ---
 
-### 2. 聚合根 Agent：封装状态与领域事件
+## 阶段二：规划能力升级（Plan 持久化）
 
-`Agent` 是整个框架的核心聚合根，代表一个具备自主决策和工具调用能力的智能体：
+在执行前，应用层会通过 `PlanningDomainService#createPlan` 创建 Plan，并在流程结束时持久化到 `PlanRepository`。
 
-```java
-@Getter
-public class Agent {
-    private final AgentId id;
-    private AgentConfig config;
-    private AgentStatus status;
-    private final List<Tool> tools;
-    private final List<Map<String, String>> conversationHistory;
-    private final List<DomainEvent> domainEvents;
+执行过程中的每次决策都会落成 `PlanStep`：
 
-    // 工厂方法：新建
-    public static Agent create(AgentConfig config) { ... }
+- `thought`
+- `action`
+- `actionInput`
+- `observation`
+- `status`
 
-    // 工厂方法：从持久化恢复
-    public static Agent restore(AgentId id, AgentConfig config, ...) { ... }
+并通过 API 支持查询最近一次计划：
 
-    // 状态迁移（含校验）
-    public void markRunning() { ... }
-    public void markCompleted(String finalAnswer) { ... }
-    public void markFailed(String error) { ... }
+- `GET /api/agents/{id}/plan`
 
-    // 领域事件（pull 后自动清空）
-    public List<DomainEvent> pullDomainEvents() { ... }
-}
-```
-
-几个值得关注的设计点：
-
-- **私有构造 + 静态工厂**：区分"新建"与"恢复"两种语义，避免将持久化逻辑侵入构造函数。
-- **不可变集合暴露**：`getTools()` 返回 `Collections.unmodifiableList`，防止外部篡改聚合根内部状态。
-- **领域事件 pull 模式**：调用 `pullDomainEvents()` 一次性取走并清空事件队列，天然支持应用层在事务提交后发布事件。
+**价值**：Agent 从“黑盒调用”升级为“可复盘的思维链 + 行动链”。
 
 ---
 
-### 3. 应用层：引入独立 DTO，切断逆向依赖
+## 阶段三：执行能力升级（ReAct 闭环更完整）
 
-原代码中，应用层 `AgentAssembler` 直接构建并返回了接口层的 HTTP Response DTO（`AgentResponse`），产生了"应用层 → 接口层"的非法向上依赖。
+核心逻辑在 `AgentDomainService#executeReActStep`：
 
-解法是在应用层引入独立的结果 DTO，让转换职责分层：
+1. 调用 `LLMPort.decide(...)` 获取决策
+2. 若为最终答案，直接完成 Agent
+3. 若为工具调用，记录思考与动作
+4. 执行工具并回填 `observation`
+5. 将 Thought/Action/ToolResult 写回会话历史
 
-```
-接口层 DTO          应用层 DTO         领域模型
-AgentResponse  ←  AgentResult  ←  Agent
-RunTaskResponse ← RunTaskResult ← AgentRunTask
-PlanResponse   ←  PlanResult   ←  Plan
-```
+这一轮设计把关键状态全部显式化：
 
-- **`AgentAssembler`**（`langur-application`）：`Agent` → `AgentResult`
-- **`AgentApiAssembler`**（`langur-api`）：`AgentResult` → `AgentResponse`
+- Agent 状态：`IDLE/RUNNING/COMPLETED/FAILED`
+- 计划步骤状态：`RUNNING/COMPLETED/FAILED/...`
+- 最大迭代保护：`maxIterations`
 
-每一层只做本层内的 DTO 转换，严格保持单向依赖。
-
----
-
-### 4. API 层：职责内聚的 Controller
-
-`AgentController` 只做两件事：**HTTP 协议解析** + **委托给应用服务**，不含任何业务逻辑：
-
-```java
-@RestController
-@RequestMapping("/api/agents")
-@RequiredArgsConstructor
-public class AgentController {
-
-    private final AgentApplicationService agentApplicationService;
-    private final AgentRunTaskApplicationService runTaskApplicationService;
-    private final AgentApiAssembler apiAssembler;
-
-    @PostMapping("/{agentId}/run/async")
-    public ResponseEntity<RunTaskResponse> runAgentAsync(
-            @PathVariable String agentId,
-            @RequestBody RunAgentRequest request) {
-        RunAgentCommand command = buildRunCommand(agentId, request);
-        return ResponseEntity.accepted().body(
-                apiAssembler.toResponse(runTaskApplicationService.startAsyncRun(command)));
-    }
-
-    @GetMapping("/{agentId}/plan")
-    public ResponseEntity<PlanResponse> getLatestPlan(@PathVariable String agentId) {
-        PlanResult plan = agentApplicationService.getLatestPlan(agentId)
-                .orElseThrow(() -> new PlanNotFoundException(agentId));
-        return ResponseEntity.ok(apiAssembler.toResponse(plan));
-    }
-    // ...
-}
-```
-
-注意 `getLatestPlan` 的异常修复：找不到 Plan 时抛 `PlanNotFoundException` 而非 `AgentNotFoundException`，语义更精确，也方便接入全局异常处理返回不同 HTTP 状态码。
+**价值**：Agent 的 Reason-Act 循环具备了可中断、可诊断、可审计的工程属性。
 
 ---
 
-### 5. 公共模块：无框架依赖的异常体系
+## 阶段四：运营能力升级（异步任务化 + 可观测）
 
-`langur-common` 只包含异常层次结构，刻意不引入任何 Spring 依赖，使其成为真正的"零依赖"基础：
+新增 `AgentRunTask` 与 `AgentRunTaskApplicationService`，把执行过程任务化：
 
-```java
-// 基础异常
-public abstract class LangurException extends RuntimeException { ... }
+- `POST /api/agents/{id}/run/async`：异步启动
+- `GET /api/agents/runs/{taskId}`：查询任务状态
+- `GET /api/agents/{id}/runs`：按 Agent 查看任务列表
 
-// 业务语义异常
-public class AgentNotFoundException extends LangurException { ... }
-public class PlanNotFoundException extends LangurException { ... }
-public class ToolNotFoundException extends LangurException { ... }
-```
+任务状态生命周期：
 
-这样，异常类可以在 `domain`、`application`、`api` 任意层引用，而不会带入额外的框架依赖。
+- `PENDING -> RUNNING -> COMPLETED/FAILED/CANCELLED`
 
----
+并携带 `userId/tenantId/sessionId`，便于多租户和会话级追踪。
 
-## 依赖方向全景图
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   langur-start                      │
-│           (主类 + application.yml + 打包)            │
-└───────────────────┬─────────────────────────────────┘
-                    │ 聚合所有模块
-        ┌───────────┴──────────┐
-        ▼                      ▼
-┌──────────────┐      ┌─────────────────────┐
-│  langur-api  │      │ langur-infrastructure│
-│ (Controller) │      │  (Adapter/Repo/Tool) │
-└──────┬───────┘      └──────────┬───────────┘
-       │ 依赖                    │ 依赖
-       ▼                         ▼
-┌──────────────────────────────────┐
-│        langur-application        │
-│   (AppService / Command / DTO)   │
-└──────────────┬───────────────────┘
-               │ 依赖
-               ▼
-┌──────────────────────────────────┐
-│          langur-domain           │
-│  (聚合根 / 领域服务 / Port 接口)  │
-└──────────────┬───────────────────┘
-               │ 依赖
-               ▼
-┌──────────────────────────────────┐
-│          langur-common           │
-│       (异常体系 / 值对象)         │
-└──────────────────────────────────┘
-```
+**价值**：Agent 从“同步接口能力”升级为“可并发调度的运行单元”，为生产环境接入奠定基础。
 
 ---
 
-## 重构前后对比
+## DDD 改造在这里扮演什么角色？
 
-| 问题 | 重构前 | 重构后 |
-|------|--------|--------|
-| `LLMPort` 位置 | `infrastructure.llm`（基础设施层） | `domain.port`（领域层） |
-| 应用层 Assembler | 引用 `interfaces.dto.*`（逆向依赖） | 只引用 `application.dto.*` |
-| 接口层 Assembler | 不存在，混在 Controller 里 | 独立 `AgentApiAssembler` |
-| Plan 未找到异常 | 抛 `AgentNotFoundException` | 抛 `PlanNotFoundException` |
-| 模块边界 | 单模块，包名约定，无强制隔离 | Maven 多模块，编译期强制依赖方向 |
+本次 DDD 多模块拆分（common/domain/application/api/infrastructure/start）不是目标本身，而是为四阶段能力提供稳定边界：
 
----
+- Domain 专注 Agent 规则与状态机
+- Application 负责编排用例与输入归一
+- API 专注协议层输出
+- Infrastructure 实现 LLM / Tool / Repository 适配
 
-## 实践总结
-
-### 六边形架构落地的三条准则
-
-1. **端口归领域，适配器归基础设施**：`LLMPort`、`ToolProvider` 等 SPI 接口必须定义在 `domain.port` 包，基础设施只负责实现，永远不拥有契约。
-
-2. **每层有且只有本层 DTO**：领域层用领域对象，应用层用应用结果 DTO，接口层用 HTTP DTO。Assembler 只做相邻层之间的单向转换，禁止跨层引用。
-
-3. **Maven 模块是最好的架构护栏**：包名约定靠人遵守，但 Maven 模块依赖图是编译器强制执行的。错误的依赖在 `mvn compile` 时就会报错，不会等到 Code Review。
-
-### 为什么这对 AI Agent 框架尤其重要？
-
-AI Agent 框架的特殊性在于：**LLM 是一个外部系统**，就像数据库一样，应该被视为基础设施。
-
-如果领域逻辑直接耦合到 OpenAI SDK，以后切换到 Claude、本地 Ollama，甚至 Mock LLM 做单元测试，都会非常痛苦。通过 `LLMPort` 的依赖倒置，领域层的 ReAct 推理循环完全不感知底层调用哪家 LLM，只需关注"给我一个决策（工具调用 or 最终答案）"的业务语义。
+尤其是 `LLMPort` 回归 `domain.port`，使 Agent 核心流程不再绑定具体 LLM 供应商，保证了后续扩展能力。
 
 ---
 
-## 快速体验
+## 对业务方最直接的收益
 
-```bash
-# 克隆项目
-git clone https://github.com/Jashinck/Langur.git
-cd Langur
+从业务视角看，这次 MR 带来的不是“架构更优雅”，而是更实际的四点：
 
-# 配置 OpenAI API Key
-export OPENAI_API_KEY=sk-...
-
-# 打包（跳过测试）
-mvn -DskipTests package
-
-# 启动
-java -jar langur-start/target/langur.jar
-
-# 创建一个 Agent
-curl -X POST http://localhost:8080/api/agents \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my-agent","systemPrompt":"You are a helpful assistant.","model":"gpt-4o-mini","maxIterations":10}'
-
-# 异步执行任务
-curl -X POST http://localhost:8080/api/agents/{agentId}/run/async \
-  -H "Content-Type: application/json" \
-  -d '{"userMessage":"帮我查询今天的天气"}'
-```
+1. **接入成本更低**：输入协议支持结构化内容
+2. **排障效率更高**：每次执行都有 Plan 可复盘
+3. **稳定性更强**：状态机 + 迭代上限 + 异常路径清晰
+4. **生产可用性更好**：异步任务化 + 状态查询 + 列表检索
 
 ---
 
-## 小结
+## 总结
 
-本次重构不是为了重构而重构，而是在项目规模扩大、问题暴露后做出的**架构偿还**。六边形架构的核心价值是**可测试性**和**可替换性**：领域逻辑不依赖任何框架，可以在没有 Spring 容器的纯 Java 环境中单元测试；基础设施实现（LLM、持久化）随时可替换，只需实现对应的 Port 接口。
+如果要用一句话概括这次 MR：
 
-如果你的项目也正在经历"包名约定守不住、层间依赖越来越乱"的困境，不妨考虑用 **Maven 多模块 + DDD 分层** 来做一次架构守护——让编译器替你把关，而不是靠 Code Review 靠人力。
+> **Langur 从“有 Agent 功能”升级到了“有 Agent 生命周期管理能力”。**
+
+DDD 多模块拆分是地基，但真正拉开差距的是这套四阶段闭环：
+
+**输入标准化 → 规划可追踪 → 执行可诊断 → 运行可运营**。
+
+这也是 Agent 框架走向生产化最关键的一步。
 
 ---
 
-*Langur 项目地址：[https://github.com/Jashinck/Langur](https://github.com/Jashinck/Langur)*  
-*欢迎 Star ⭐ 和 Issue 交流！*
+*Langur 项目地址：[https://github.com/Jashinck/Langur](https://github.com/Jashinck/Langur)*
