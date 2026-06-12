@@ -1128,18 +1128,18 @@ public List<Tool> getToolsByNames(List<String> toolNames) {
 @Primary  // 覆盖内存实现，Spring 优先注入此实现
 public class JpaAgentRepository implements AgentRepository {
     @Autowired
-    private AgentJpaRepository jpaRepository;
+    private AgentJpaRepository springDataRepository;  // Spring Data JPA 自动实现
 
     @Override
     public void save(Agent agent) {
         // 自动将 Domain 对象转换为数据库实体
         AgentDO agentDO = AgentDO.from(agent);
-        jpaRepository.save(agentDO);
+        springDataRepository.save(agentDO);
     }
 
     @Override
     public Optional<Agent> findById(String id) {
-        return jpaRepository.findById(id)
+        return springDataRepository.findById(id)
                 .map(AgentDO::toDomain);  // DO → Domain
     }
 }
@@ -1211,12 +1211,12 @@ public class PlanDO {
 }
 
 @Entity
-@Table(name = "t_agent_run_task")
+@Table(name = "t_agent_run_task", indexes = @Index(columnList = "agentId"))
 public class AgentRunTaskDO {
     @Id
     private String id;
-    @Column(nullable = false, index = true)  // 索引优化查询
-    private String agentId;
+    @Column(nullable = false)
+    private String agentId;  // 通过 @Table 注解中的 indexes 定义索引
     private String status;
     private String error;
     @Column(columnDefinition = "TEXT")
@@ -1231,18 +1231,46 @@ public class AgentRunTaskDO {
 通过 `JsonValueMapper` 实现复杂对象的自动序列化/反序列化，保证 Domain 层与 DO 层的无缝转换：
 
 ```java
+// 通用的 JSON 转换器（支持任意对象类型）
 @Converter
-public class JsonValueMapper implements AttributeConverter<String, String> {
+public class JsonValueMapper<T> implements AttributeConverter<T, String> {
+    private final Class<T> targetClass;
+    
+    public JsonValueMapper(Class<T> targetClass) {
+        this.targetClass = targetClass;
+    }
+
     @Override
-    public String convertToDatabaseColumn(String attribute) {
+    public String convertToDatabaseColumn(T attribute) {
+        if (attribute == null) return null;
         // Domain 对象 → JSON String
         return JsonUtils.toJson(attribute);
     }
 
     @Override
-    public String convertToEntityAttribute(String dbData) {
+    public T convertToEntityAttribute(String dbData) {
+        if (dbData == null) return null;
         // JSON String → Domain 对象
-        return JsonUtils.fromJson(dbData, String.class);
+        return JsonUtils.fromJson(dbData, targetClass);
+    }
+}
+
+// 在实体中使用转换器
+@Entity
+@Table(name = "t_agent")
+public class AgentDO {
+    @Id
+    private String id;
+    
+    @Convert(converter = ConversationHistoryConverter.class)
+    private List<ConversationMessage> conversationHistory;
+}
+
+// 为特定类型创建具体转换器
+@Converter
+public class ConversationHistoryConverter extends JsonValueMapper<List<ConversationMessage>> {
+    public ConversationHistoryConverter() {
+        super(new TypeReference<List<ConversationMessage>>(){}.getType());
     }
 }
 ```
