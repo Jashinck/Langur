@@ -1128,7 +1128,7 @@ public List<Tool> getToolsByNames(List<String> toolNames) {
 @Primary  // 覆盖内存实现，Spring 优先注入此实现
 public class JpaAgentRepository implements AgentRepository {
     @Autowired
-    private AgentJpaRepository agentDataRepository;  // Spring Data JPA repository
+    private AgentJpaRepository agentDataRepository;  // Spring Data JPA 自动实现的 CRUD repository
 
     @Override
     public void save(Agent agent) {
