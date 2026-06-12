@@ -11,10 +11,11 @@ import java.util.Map;
 public interface LLMPort {
 
     LLMDecision decide(String systemPrompt,
+                       String model,
                        List<Map<String, String>> conversationHistory,
                        List<Tool> availableTools);
 
-    String complete(String systemPrompt, String userMessage);
+    String complete(String systemPrompt, String model, String userMessage);
 
     class LLMDecision {
         private final boolean finalAnswer;

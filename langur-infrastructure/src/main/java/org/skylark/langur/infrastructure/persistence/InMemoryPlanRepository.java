@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.persistence;
 
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.repository.PlanRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 import java.util.Map;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
+@ConditionalOnProperty(name = "langur.repository.type", havingValue = "memory", matchIfMissing = true)
 public class InMemoryPlanRepository implements PlanRepository {
 
     private final Map<String, Plan> store = new ConcurrentHashMap<>();

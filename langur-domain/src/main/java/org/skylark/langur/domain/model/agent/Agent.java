@@ -22,6 +22,7 @@ public class Agent {
     private AgentConfig config;
     private AgentStatus status;
     private final List<Tool> tools;
+    private final List<String> registeredToolNames;
     private final List<Map<String, String>> conversationHistory;
     private final List<DomainEvent> domainEvents;
     private int iterationCount;
@@ -29,32 +30,37 @@ public class Agent {
     private final Instant createdAt;
     private Instant updatedAt;
 
-    private Agent(AgentId id, AgentConfig config) {
+    private Agent(AgentId id, AgentConfig config, Instant createdAt, Instant updatedAt, boolean recordCreationEvent) {
         this.id = id;
         this.config = config;
         this.status = AgentStatus.IDLE;
         this.tools = new ArrayList<>();
+        this.registeredToolNames = new ArrayList<>();
         this.conversationHistory = new ArrayList<>();
         this.domainEvents = new ArrayList<>();
         this.iterationCount = 0;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-        recordEvent(new AgentCreatedEvent(id.getValue(), config.getName()));
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        if (recordCreationEvent) {
+            recordEvent(new AgentCreatedEvent(id.getValue(), config.getName()));
+        }
     }
 
     public static Agent create(AgentConfig config) {
-        return new Agent(AgentId.generate(), config);
+        Instant now = Instant.now();
+        return new Agent(AgentId.generate(), config, now, now, true);
     }
 
     public static Agent restore(AgentId id, AgentConfig config, AgentStatus status,
-                                 List<Tool> tools, List<Map<String, String>> history,
-                                 int iterationCount, Instant createdAt) {
-        Agent agent = new Agent(id, config);
+                                 List<String> registeredToolNames, List<Map<String, String>> history,
+                                 int iterationCount, String lastError, Instant createdAt,
+                                 Instant updatedAt) {
+        Agent agent = new Agent(id, config, createdAt, updatedAt, false);
         agent.status = status;
-        agent.tools.addAll(tools);
+        agent.registeredToolNames.addAll(registeredToolNames);
         agent.conversationHistory.addAll(history);
         agent.iterationCount = iterationCount;
-        agent.domainEvents.clear(); // clear creation event on restore
+        agent.lastError = lastError;
         return agent;
     }
 
@@ -63,6 +69,9 @@ public class Agent {
             throw new IllegalArgumentException("Tool already registered: " + tool.getName());
         }
         tools.add(tool);
+        if (!registeredToolNames.contains(tool.getName())) {
+            registeredToolNames.add(tool.getName());
+        }
         updatedAt = Instant.now();
     }
 
@@ -111,6 +120,10 @@ public class Agent {
 
     public List<Tool> getTools() {
         return Collections.unmodifiableList(tools);
+    }
+
+    public List<String> getRegisteredToolNames() {
+        return Collections.unmodifiableList(registeredToolNames);
     }
 
     public List<Map<String, String>> getConversationHistory() {

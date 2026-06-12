@@ -13,9 +13,17 @@ public class Plan {
     private int currentStepIndex;
 
     public Plan(String agentId) {
+        this(agentId, new ArrayList<>(), 0);
+    }
+
+    private Plan(String agentId, List<PlanStep> steps, int currentStepIndex) {
         this.agentId = agentId;
-        this.steps = new ArrayList<>();
-        this.currentStepIndex = 0;
+        this.steps = steps;
+        this.currentStepIndex = currentStepIndex;
+    }
+
+    public static Plan restore(String agentId, List<PlanStep> steps, int currentStepIndex) {
+        return new Plan(agentId, new ArrayList<>(steps), currentStepIndex);
     }
 
     public void addStep(PlanStep step) {

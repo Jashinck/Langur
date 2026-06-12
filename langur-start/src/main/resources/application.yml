@@ -6,9 +6,39 @@ spring:
     name: langur
 
 langur:
+  repository:
+    type: memory
   llm:
-    base-url: https://api.openai.com/v1
-    api-key: ${LANGUR_LLM_API_KEY:}
-    model: gpt-4o
+    default-provider: openai
+    providers:
+      openai:
+        enabled: true
+        base-url: https://api.openai.com/v1
+        api-key: ${OPENAI_API_KEY:${LANGUR_LLM_API_KEY:}}
+        model: gpt-4o
+      deepseek:
+        enabled: false
+        base-url: https://api.deepseek.com/v1
+        api-key: ${DEEPSEEK_API_KEY:}
+        model: deepseek-chat
+      qwen:
+        enabled: false
+        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        api-key: ${QWEN_API_KEY:}
+        model: qwen-max
+      claude:
+        enabled: false
+        base-url: https://api.anthropic.com
+        api-key: ${CLAUDE_API_KEY:}
+        model: claude-3-5-sonnet-20241022
+      gemini:
+        enabled: false
+        base-url: https://generativelanguage.googleapis.com
+        api-key: ${GEMINI_API_KEY:}
+        model: gemini-1.5-pro
+    routing-rules:
+      fast: deepseek-chat
+      powerful: gpt-4o
+      cheap: qwen-max
   run-task:
     executor-size: 4

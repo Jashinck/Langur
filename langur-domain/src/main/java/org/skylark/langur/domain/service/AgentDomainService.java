@@ -11,8 +11,6 @@ import org.skylark.langur.domain.model.tool.ToolResult;
 import org.skylark.langur.domain.port.LLMPort;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-
 /**
  * Agent领域服务 - 编排ReAct（推理-行动）循环
  */
@@ -34,9 +32,9 @@ public class AgentDomainService {
 
         agent.incrementIteration();
 
-        // 调用LLM决策：思考与选择下一步行动
         LLMPort.LLMDecision decision = llmPort.decide(
                 agent.getConfig().getSystemPrompt(),
+                agent.getConfig().getModel(),
                 agent.getConversationHistory(),
                 agent.getTools()
         );
@@ -46,7 +44,6 @@ public class AgentDomainService {
             return decision.getFinalAnswer();
         }
 
-        // 记录思考步骤
         PlanStep step = PlanStep.builder()
                 .index(agent.getIterationCount())
                 .thought(decision.getThought())
@@ -56,7 +53,6 @@ public class AgentDomainService {
                 .build();
         plan.addStep(step);
 
-        // 找到工具并执行
         Tool tool = agent.getTools().stream()
                 .filter(t -> t.getName().equals(decision.getToolName()))
                 .findFirst()
@@ -73,18 +69,16 @@ public class AgentDomainService {
             }
         }
 
-        // 更新计划步骤
         int lastIndex = plan.getSteps().size() - 1;
         plan.updateStep(lastIndex, result.isSuccess()
                 ? step.withObservation(result.getContent())
                 : step.withFailure(result.getError()));
 
-        // 将工具结果添加到对话历史
         agent.addAssistantMessage("Thought: " + decision.getThought() +
                 "\nAction: " + decision.getToolName() +
                 "\nAction Input: " + decision.getToolArguments());
         agent.addToolResultMessage(decision.getToolName(), result.getEffectiveContent());
 
-        return null; // 继续迭代
+        return null;
     }
 }

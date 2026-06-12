@@ -19,19 +19,32 @@ public class AgentRunTask {
     private String resultSummary;
     private String lastError;
 
-    private AgentRunTask(String taskId, String agentId, String userId, String tenantId, String sessionId) {
+    private AgentRunTask(String taskId, String agentId, String userId, String tenantId,
+                         String sessionId, Instant createdAt, Instant updatedAt,
+                         RunTaskStatus status, String resultSummary, String lastError) {
         this.taskId = taskId;
         this.agentId = agentId;
         this.userId = userId;
         this.tenantId = tenantId;
         this.sessionId = sessionId;
-        this.status = RunTaskStatus.PENDING;
-        this.createdAt = Instant.now();
-        this.updatedAt = this.createdAt;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.resultSummary = resultSummary;
+        this.lastError = lastError;
     }
 
     public static AgentRunTask create(String agentId, String userId, String tenantId, String sessionId) {
-        return new AgentRunTask(UUID.randomUUID().toString(), agentId, userId, tenantId, sessionId);
+        Instant now = Instant.now();
+        return new AgentRunTask(UUID.randomUUID().toString(), agentId, userId, tenantId, sessionId,
+                now, now, RunTaskStatus.PENDING, null, null);
+    }
+
+    public static AgentRunTask restore(String taskId, String agentId, String userId, String tenantId,
+                                       String sessionId, Instant createdAt, Instant updatedAt,
+                                       RunTaskStatus status, String resultSummary, String lastError) {
+        return new AgentRunTask(taskId, agentId, userId, tenantId, sessionId,
+                createdAt, updatedAt, status, resultSummary, lastError);
     }
 
     public void markRunning() {
