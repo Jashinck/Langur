@@ -4,20 +4,23 @@ import org.skylark.langur.domain.model.execution.AgentRunTask;
 import org.skylark.langur.domain.repository.AgentRunTaskRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 @Repository
 public class InMemoryAgentRunTaskRepository implements AgentRunTaskRepository {
 
-    private final Map<String, AgentRunTask> store = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, AgentRunTask> store = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, java.util.Set<String>> agentTaskIds = new ConcurrentHashMap<>();
 
     @Override
     public void save(AgentRunTask task) {
         store.put(task.getTaskId(), task);
+        agentTaskIds.computeIfAbsent(task.getAgentId(), key -> ConcurrentHashMap.newKeySet())
+                .add(task.getTaskId());
     }
 
     @Override
@@ -27,12 +30,14 @@ public class InMemoryAgentRunTaskRepository implements AgentRunTaskRepository {
 
     @Override
     public List<AgentRunTask> findByAgentId(String agentId) {
-        List<AgentRunTask> results = new ArrayList<>();
-        for (AgentRunTask task : store.values()) {
-            if (agentId.equals(task.getAgentId())) {
-                results.add(task);
-            }
+        java.util.Set<String> taskIds = agentTaskIds.get(agentId);
+        if (taskIds == null || taskIds.isEmpty()) {
+            return List.of();
         }
-        return results;
+
+        return taskIds.stream()
+                .map(store::get)
+                .filter(Objects::nonNull)
+                .toList();
     }
 }

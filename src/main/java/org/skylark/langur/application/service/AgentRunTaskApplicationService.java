@@ -1,5 +1,6 @@
 package org.skylark.langur.application.service;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,12 +9,14 @@ import org.skylark.langur.domain.model.execution.AgentRunTask;
 import org.skylark.langur.domain.repository.AgentRunTaskRepository;
 import org.skylark.langur.interfaces.dto.AgentResponse;
 import org.skylark.langur.interfaces.dto.RunTaskResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -23,7 +26,15 @@ public class AgentRunTaskApplicationService {
     private final AgentRunTaskRepository taskRepository;
     private final AgentApplicationService agentApplicationService;
 
-    private final ExecutorService executorService = Executors.newFixedThreadPool(4);
+    @Value("${langur.run-task.executor-size:4}")
+    private int executorSize;
+
+    private ExecutorService executorService;
+
+    @PostConstruct
+    public void init() {
+        this.executorService = Executors.newFixedThreadPool(executorSize);
+    }
 
     public RunTaskResponse startAsyncRun(RunAgentCommand command) {
         AgentRunTask task = AgentRunTask.create(
@@ -81,6 +92,17 @@ public class AgentRunTaskApplicationService {
 
     @PreDestroy
     public void shutdown() {
-        executorService.shutdownNow();
+        if (executorService == null) {
+            return;
+        }
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            executorService.shutdownNow();
+        }
     }
 }

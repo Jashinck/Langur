@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Agent应用服务 - 编排领域对象，处理用例
@@ -123,8 +124,7 @@ public class AgentApplicationService {
         String merged = parts.stream()
                 .map(this::toTextLine)
                 .filter(StringUtils::isNotBlank)
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse("");
+                .collect(Collectors.joining("\n"));
 
         if (StringUtils.isBlank(merged)) {
             throw new IllegalArgumentException("messageParts did not produce any usable content");
