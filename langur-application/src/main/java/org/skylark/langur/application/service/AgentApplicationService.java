@@ -134,14 +134,15 @@ public class AgentApplicationService {
     }
 
     private Agent rehydrateTools(Agent agent) {
-        if (!agent.getTools().isEmpty()) {
-            return agent;
-        }
         List<String> registeredToolNames = agent.getRegisteredToolNames();
         if (registeredToolNames.isEmpty()) {
             return agent;
         }
-        toolRegistryService.getToolsByNames(registeredToolNames).forEach(agent::registerTool);
+        agent.getRegisteredToolNames().stream()
+                .filter(name -> agent.getTools().stream().noneMatch(tool -> tool.getName().equals(name)))
+                .map(name -> toolRegistryService.getToolsByNames(List.of(name)))
+                .flatMap(List::stream)
+                .forEach(agent::registerTool);
         return agent;
     }
 

@@ -3,6 +3,7 @@ package org.skylark.langur.infrastructure.persistence.jpa;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,7 +24,7 @@ public class JsonValueMapper {
     }
 
     public <T> T read(String value, TypeReference<T> typeReference, T defaultValue) {
-        if (value == null || value.isBlank()) {
+        if (StringUtils.isBlank(value)) {
             return defaultValue;
         }
         try {

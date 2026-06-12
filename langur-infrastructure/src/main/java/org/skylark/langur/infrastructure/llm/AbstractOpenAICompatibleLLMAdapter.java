@@ -113,8 +113,10 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
         if (toolCalls != null && toolCalls.isArray() && !toolCalls.isEmpty()) {
             JsonNode call = toolCalls.get(0);
             String toolName = call.at("/function/name").asText();
-            String argsJson = call.at("/function/arguments").asText("{}");
-            Map<String, Object> args = objectMapper.readValue(argsJson, Map.class);
+            String argsJson = call.at("/function/arguments").asText();
+            Map<String, Object> args = StringUtils.isBlank(argsJson)
+                    ? Map.of()
+                    : objectMapper.readValue(argsJson, Map.class);
             String thought = message.has("content") && !message.get("content").isNull()
                     ? message.get("content").asText() : "Calling tool: " + toolName;
             return LLMDecision.toolCall(thought, toolName, args);
