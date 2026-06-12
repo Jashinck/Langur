@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.persistence;
 
 import org.skylark.langur.domain.model.execution.AgentRunTask;
 import org.skylark.langur.domain.repository.AgentRunTaskRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 @Repository
+@ConditionalOnProperty(name = "langur.repository.type", havingValue = "memory", matchIfMissing = true)
 public class InMemoryAgentRunTaskRepository implements AgentRunTaskRepository {
 
     private final ConcurrentMap<String, AgentRunTask> store = new ConcurrentHashMap<>();

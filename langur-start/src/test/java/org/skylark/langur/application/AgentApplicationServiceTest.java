@@ -9,7 +9,14 @@ import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.dto.AgentResult;
 import org.skylark.langur.application.service.AgentApplicationService;
 import org.skylark.langur.application.service.ToolRegistryService;
+import org.skylark.langur.domain.model.agent.Agent;
+import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.agent.AgentId;
+import org.skylark.langur.domain.model.agent.AgentStatus;
 import org.skylark.langur.domain.model.message.MessagePartType;
+import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.model.tool.ToolDefinition;
+import org.skylark.langur.domain.model.tool.ToolResult;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.domain.port.ToolProvider;
 import org.skylark.langur.domain.repository.AgentRepository;
@@ -19,9 +26,13 @@ import org.skylark.langur.domain.service.PlanningDomainService;
 import org.skylark.langur.infrastructure.persistence.InMemoryAgentRepository;
 import org.skylark.langur.infrastructure.persistence.InMemoryPlanRepository;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 
 class AgentApplicationServiceTest {
@@ -29,6 +40,7 @@ class AgentApplicationServiceTest {
     private AgentApplicationService agentApplicationService;
     private AgentRepository agentRepository;
     private LLMPort llmPort;
+    private Tool sampleTool;
 
     @BeforeEach
     void setUp() {
@@ -38,7 +50,13 @@ class AgentApplicationServiceTest {
         PlanningDomainService planningDomainService = new PlanningDomainService();
         PlanRepository planRepository = new InMemoryPlanRepository();
         ToolProvider toolProvider = mock(ToolProvider.class);
-        org.mockito.Mockito.when(toolProvider.getTools()).thenReturn(List.of());
+        sampleTool = new Tool(ToolDefinition.of("http-call", "http tool", Map.of("type", "object"))) {
+            @Override
+            public ToolResult execute(Map<String, Object> parameters) {
+                return ToolResult.success("ok");
+            }
+        };
+        org.mockito.Mockito.when(toolProvider.getTools()).thenReturn(List.of(sampleTool));
         ToolRegistryService toolRegistryService = new ToolRegistryService(List.of(toolProvider));
         AgentAssembler assembler = new AgentAssembler();
         agentApplicationService = new AgentApplicationService(
@@ -89,9 +107,7 @@ class AgentApplicationServiceTest {
     void shouldRunWithStructuredMessagePartsWhenUserMessageMissing() {
         AgentResult created = agentApplicationService.createAgent(
                 CreateAgentCommand.builder().name("Runner").build());
-        org.mockito.Mockito.when(llmPort.decide(org.mockito.ArgumentMatchers.anyString(),
-                        org.mockito.ArgumentMatchers.anyList(),
-                        org.mockito.ArgumentMatchers.anyList()))
+        org.mockito.Mockito.when(llmPort.decide(anyString(), anyString(), anyList(), anyList()))
                 .thenReturn(LLMPort.LLMDecision.finalAnswer("done"));
 
         AgentResult result = agentApplicationService.runAgent(
@@ -104,5 +120,24 @@ class AgentApplicationServiceTest {
 
         assertEquals("COMPLETED", result.getStatus());
         assertTrue(agentApplicationService.getLatestPlan(created.getId()).isPresent());
+    }
+
+    @Test
+    void shouldRehydrateToolsForRestoredAgent() {
+        Agent restored = Agent.restore(
+                AgentId.generate(),
+                AgentConfig.defaultConfig("Restored"),
+                AgentStatus.IDLE,
+                List.of(sampleTool.getName()),
+                List.of(),
+                0,
+                null,
+                Instant.now(),
+                Instant.now());
+        agentRepository.save(restored);
+
+        AgentResult result = agentApplicationService.getAgent(restored.getId().getValue());
+
+        assertEquals(1, result.getToolCount());
     }
 }

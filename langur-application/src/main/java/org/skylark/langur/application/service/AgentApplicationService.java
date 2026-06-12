@@ -55,10 +55,7 @@ public class AgentApplicationService {
                 .build();
 
         Agent agent = Agent.create(config);
-
-        List<org.skylark.langur.domain.model.tool.Tool> tools =
-                toolRegistryService.getToolsByNames(command.getToolNames());
-        tools.forEach(agent::registerTool);
+        registerConfiguredTools(agent, command.getToolNames());
 
         agentRepository.save(agent);
         log.info("Created agent: {} ({})", agent.getConfig().getName(), agent.getId());
@@ -66,8 +63,7 @@ public class AgentApplicationService {
     }
 
     public AgentResult runAgent(RunAgentCommand command) {
-        Agent agent = agentRepository.findById(AgentId.of(command.getAgentId()))
-                .orElseThrow(() -> new AgentNotFoundException(command.getAgentId()));
+        Agent agent = findAgent(command.getAgentId());
 
         agent.markRunning();
         String resolvedUserMessage = resolveUserMessage(command);
@@ -98,13 +94,12 @@ public class AgentApplicationService {
     }
 
     public AgentResult getAgent(String agentId) {
-        Agent agent = agentRepository.findById(AgentId.of(agentId))
-                .orElseThrow(() -> new AgentNotFoundException(agentId));
-        return agentAssembler.toResult(agent);
+        return agentAssembler.toResult(findAgent(agentId));
     }
 
     public List<AgentResult> listAgents() {
         return agentRepository.findAll().stream()
+                .map(this::rehydrateTools)
                 .map(agentAssembler::toResult)
                 .toList();
     }
@@ -130,6 +125,32 @@ public class AgentApplicationService {
                 .currentStepIndex(plan.getCurrentStepIndex())
                 .steps(steps)
                 .build();
+    }
+
+    private Agent findAgent(String agentId) {
+        Agent agent = agentRepository.findById(AgentId.of(agentId))
+                .orElseThrow(() -> new AgentNotFoundException(agentId));
+        return rehydrateTools(agent);
+    }
+
+    private Agent rehydrateTools(Agent agent) {
+        List<String> registeredToolNames = agent.getRegisteredToolNames();
+        if (registeredToolNames.isEmpty()) {
+            return agent;
+        }
+        List<String> missingToolNames = registeredToolNames.stream()
+                .filter(name -> agent.getTools().stream().noneMatch(tool -> tool.getName().equals(name)))
+                .toList();
+        if (missingToolNames.isEmpty()) {
+            return agent;
+        }
+        toolRegistryService.getToolsByNames(missingToolNames).stream()
+                .forEach(agent::registerTool);
+        return agent;
+    }
+
+    private void registerConfiguredTools(Agent agent, List<String> toolNames) {
+        toolRegistryService.getToolsByNames(toolNames).forEach(agent::registerTool);
     }
 
     private String resolveUserMessage(RunAgentCommand command) {
