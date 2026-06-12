@@ -107,7 +107,7 @@ Langur 采用 **DDD 六边形架构**，将系统清晰拆分为 6 层，每层�
                          │ 实现（反向依赖）
 ┌────────────────────────▼─────────────────────────────────────┐
 │                  langur-infrastructure                       │
-│       基础设施层 · LLM 适配器 · 内置工具 · 内存持久化         │
+│    基础设施层 · LLM 适配器 · 内置工具 · JPA/内存持久化        │
 └──────────────────────────────────────────────────────────────┘
 
 （横向贯穿各层）
@@ -623,9 +623,13 @@ BuiltinToolRegistry implements ToolProvider {
 }
 ```
 
-#### 3.4.3 内存持久化实现
+#### 3.4.3 持久化实现
 
-三个仓储实现均使用 `ConcurrentHashMap` 保证线程安全：
+Langur 提供两种持久化实现，通过 Repository 接口完全解耦，支持灵活切换。
+
+##### 3.4.3.1 内存实现
+
+三个仓储实现均使用 `ConcurrentHashMap` 保证线程安全，适合开发测试场景：
 
 ```java
 // 按 AgentId 存储 Agent 对象
@@ -645,7 +649,39 @@ InMemoryAgentRunTaskRepository implements AgentRunTaskRepository {
 }
 ```
 
-> **线程安全保障**：所有内存仓储使用 `ConcurrentHashMap`，`AgentRunTask` 的异步更新通过仓储接口统一修改，避免并发竞争。
+> **特点**：快速启动、零依赖，但服务重启数据丢失。
+
+##### 3.4.3.2 JPA 实现
+
+通过 Spring Data JPA 实现，支持 MySQL/PostgreSQL 等关系型数据库，生产级持久化能力：
+
+```java
+// JPA 实体类（自动ORM映射）
+AgentDO (id, agentName, createdTime, updatedTime, conversationHistory, iterationCount, status, configuration)
+PlanDO (id, agentId, createTime, finishTime, planSteps)
+AgentRunTaskDO (id, agentId, status, error, result, createdTime, updatedTime)
+
+// JPA 仓储接口（Spring Data 自动实现）
+AgentJpaRepository extends JpaRepository<AgentDO, String>
+PlanJpaRepository extends JpaRepository<PlanDO, String> with custom findByAgentId()
+AgentRunTaskJpaRepository extends JpaRepository<AgentRunTaskDO, String> with custom findByAgentId()
+
+// 适配器层（自动进行 DO ↔ Domain 转换）
+JpaAgentRepository implements AgentRepository {
+    // 自动映射 Agent ↔ AgentDO
+    AgentEntity.from(agent)  // Domain → DO
+    agent.restore(agentDO)   // DO → Domain
+}
+```
+
+> **特点**：
+> - 支持 MySQL、PostgreSQL、H2 等数据库
+> - 自动化事务管理，ACID 保证
+> - 数据库升级与迁移通过 Liquibase/Flyway
+> - 支持查询优化与索引管理
+> - 线程安全保障通过 JPA 框架
+
+> **线程安全保障**：内存实现使用 `ConcurrentHashMap`，`AgentRunTask` 的异步更新通过仓储接口统一修改。JPA 实现通过数据库事务隔离级别保证并发安全。
 
 ---
 
@@ -869,7 +905,7 @@ GET /api/agents/runs/{taskId}
 
 Langur 内置支持多种 LLM 提供商，通过实现 `LLMPort` 接口可轻松扩展任意 LLM。
 
-#### 内置 LLM 适配器
+#### 6.1.1 内置 LLM 适配器
 
 | 提供商 | 适配器类 | 特点 | 模型示例 |
 |------|---------|------|---------|
@@ -879,7 +915,7 @@ Langur 内置支持多种 LLM 提供商，通过实现 `LLMPort` 接口可轻松
 | **DeepSeek** | `DeepSeekLLMAdapter` | 兼容 OpenAI 协议，国内优化 | DeepSeek LLM |
 | **Qwen** | `QwenLLMAdapter` | 阿里云通义千问，中文优化 | Qwen-Max, Qwen-Plus |
 
-#### 配置与切换
+#### 6.1.2 配置与切换
 
 ```yaml
 # application.yml
@@ -909,13 +945,51 @@ langur:
         api-key: ${QWEN_API_KEY}
 ```
 
-#### 自定义 LLM 适配器
+#### 6.1.3 LLM 路由与动态选择
 
-实现 `LLMPort` 接口，标注 `@Component` 即可无缝集成：
+通过 `LLMRouter` 和 `ModelRoutableLLMPort` 支持按任务自动选择合适的 LLM：
+
+```java
+// LLMRouter：统一的 LLM 路由管理器
+LLMRouter {
+    LLMPort getLLMForTask(String agentId, String taskType)  // 按任务类型路由
+    LLMPort getDefaultLLM()                                  // 获取默认 LLM
+    Map<String, LLMPort> getAllAvailableLLMs()               // 列举所有可用 LLM
+}
+
+// ModelRoutableLLMPort：支持模型路由的接口
+ModelRoutableLLMPort extends LLMPort {
+    String getModelName()      // 获取模型名称
+    String getProviderName()   // 获取提供商名称
+}
+```
+
+**应用场景示例**：
+
+```java
+// 在 Agent 初始化时配置模型路由策略
+Agent agent = Agent.create(config, tools);
+agent.setModelRoutingStrategy(new ModelRoutingStrategy() {
+    @Override
+    public LLMPort selectModel(String taskType) {
+        return switch(taskType) {
+            case "reasoning" -> llmRouter.getLLM("claude");        // 推理用 Claude
+            case "coding" -> llmRouter.getLLM("openai");           // 编程用 GPT-4
+            case "chinese_understanding" -> llmRouter.getLLM("qwen"); // 中文用通义千问
+            case "multimodal" -> llmRouter.getLLM("gemini");       // 多模态用 Gemini
+            default -> llmRouter.getDefaultLLM();
+        };
+    }
+});
+```
+
+#### 6.1.4 自定义 LLM 适配器
+
+实现 `ModelRoutableLLMPort` 接口，标注 `@Component` 即可无缝集成：
 
 ```java
 @Component
-public class CustomLLMAdapter implements LLMPort {
+public class CustomLLMAdapter implements ModelRoutableLLMPort {
     @Override
     public LLMDecision decide(String systemPrompt,
                               List<Map<String, String>> history,
@@ -928,25 +1002,52 @@ public class CustomLLMAdapter implements LLMPort {
     public String complete(String systemPrompt, String userMessage) {
         // 调用你的 LLM API 的完成接口
     }
+
+    @Override
+    public String getModelName() {
+        return "custom-model-v1";
+    }
+
+    @Override
+    public String getProviderName() {
+        return "custom-provider";
+    }
 }
 ```
 
-#### LLM 路由与模型选择
-
-通过 `LLMRouter` 支持按任务自动选择合适的 LLM：
+#### 6.1.5 LLM 路由实现机制
 
 ```java
-LLMRouter {
-    LLMPort getLLMForTask(String agentId, String taskType)
-    LLMPort getDefaultLLM()
+@Component
+public class LLMRouter {
+    @Autowired
+    private Map<String, ModelRoutableLLMPort> llmAdapters;  // 自动注入所有 LLM 适配器
+    
+    @Autowired
+    private LlmProperties config;  // 从配置文件读取默认和启用的 LLM
+
+    public LLMPort getLLMForTask(String agentId, String taskType) {
+        // 优先按任务类型查询，找不到则使用默认
+        ModelRoutableLLMPort llm = llmAdapters.get(taskType);
+        return llm != null ? llm : getDefaultLLM();
+    }
+
+    public LLMPort getDefaultLLM() {
+        String defaultProvider = config.getDefault();  // 从配置读取
+        return llmAdapters.get(defaultProvider);
+    }
+
+    public Map<String, LLMPort> getAllAvailableLLMs() {
+        return llmAdapters.entrySet().stream()
+                .filter(e -> isEnabled(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private boolean isEnabled(String provider) {
+        return config.getProviders().get(provider).isEnabled();
+    }
 }
 ```
-
-**应用场景**：
-- **推理类任务** → 使用 Claude（强推理）
-- **编码任务** → 使用 GPT-4（代码质量高）
-- **中文理解** → 使用 Qwen（中文优化）
-- **多模态任务** → 使用 Gemini（视觉能力强）
 
 ### 6.2 注册自定义工具
 
@@ -1015,24 +1116,165 @@ public List<Tool> getToolsByNames(List<String> toolNames) {
 - **Agent 恢复**：从持久化存储恢复时立即生效
 - **内存占用**：无额外内存开销，仅优化查询顺序
 
-### 6.4 替换持久化存储
+### 6.4 数据库持久化集成
 
-实现仓储接口，替换内存实现为数据库实现：
+#### 6.4.1 从内存迁移到 JPA 数据库实现
+
+实现仓储接口，替换内存实现为数据库实现，**无需修改 Domain 层代码**：
 
 ```java
+// 方式一：通过 @Primary 注解自动切换
 @Repository
-@Primary  // 覆盖内存实现
+@Primary  // 覆盖内存实现，Spring 优先注入此实现
 public class JpaAgentRepository implements AgentRepository {
     @Autowired
-    private AgentJpaDao dao;
+    private AgentJpaRepository jpaRepository;
 
     @Override
     public void save(Agent agent) {
-        dao.save(AgentEntity.from(agent));
+        // 自动将 Domain 对象转换为数据库实体
+        AgentDO agentDO = AgentDO.from(agent);
+        jpaRepository.save(agentDO);
     }
-    // ...
+
+    @Override
+    public Optional<Agent> findById(String id) {
+        return jpaRepository.findById(id)
+                .map(AgentDO::toDomain);  // DO → Domain
+    }
 }
 ```
+
+#### 6.4.2 数据库配置
+
+在 `application.yml` 中配置数据库连接：
+
+```yaml
+spring:
+  datasource:
+    # MySQL 示例
+    url: jdbc:mysql://localhost:3306/langur?useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 或 PostgreSQL
+    # url: jdbc:postgresql://localhost:5432/langur
+    # driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate  # 生产环境使用 validate，开发使用 create-drop
+    database-platform: org.hibernate.dialect.MySQL8Dialect  # 或 PostgreSQL10Dialect
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+```
+
+#### 6.4.3 JPA 实体设计
+
+三个核心 JPA 实体自动处理 Domain 模型持久化：
+
+```java
+@Entity
+@Table(name = "t_agent")
+public class AgentDO {
+    @Id
+    private String id;
+    private String agentName;
+    private LocalDateTime createdTime;
+    private LocalDateTime updatedTime;
+    
+    @Convert(converter = JsonValueMapper.class)  // JSON 存储复杂对象
+    private String conversationHistory;
+    private Integer iterationCount;
+    private String status;
+    private String configuration;  // Agent 配置信息
+}
+
+@Entity
+@Table(name = "t_plan")
+public class PlanDO {
+    @Id
+    private String id;
+    @Column(nullable = false)
+    private String agentId;
+    private LocalDateTime createTime;
+    private LocalDateTime finishTime;
+    
+    @Convert(converter = JsonValueMapper.class)
+    private String planSteps;  // 步骤数据序列化
+}
+
+@Entity
+@Table(name = "t_agent_run_task")
+public class AgentRunTaskDO {
+    @Id
+    private String id;
+    @Column(nullable = false, index = true)  // 索引优化查询
+    private String agentId;
+    private String status;
+    private String error;
+    @Column(columnDefinition = "TEXT")
+    private String result;  // 支持大文本
+    private LocalDateTime createdTime;
+    private LocalDateTime updatedTime;
+}
+```
+
+#### 6.4.4 自动映射机制
+
+通过 `JsonValueMapper` 实现复杂对象的自动序列化/反序列化，保证 Domain 层与 DO 层的无缝转换：
+
+```java
+@Converter
+public class JsonValueMapper implements AttributeConverter<String, String> {
+    @Override
+    public String convertToDatabaseColumn(String attribute) {
+        // Domain 对象 → JSON String
+        return JsonUtils.toJson(attribute);
+    }
+
+    @Override
+    public String convertToEntityAttribute(String dbData) {
+        // JSON String → Domain 对象
+        return JsonUtils.fromJson(dbData, String.class);
+    }
+}
+```
+
+#### 6.4.5 动态切换存储实现
+
+通过配置文件动态选择持久化实现，无需改代码：
+
+```yaml
+langur:
+  persistence:
+    type: jpa  # 可选值: memory, jpa
+```
+
+```java
+@Configuration
+public class PersistenceConfig {
+    @Bean
+    @ConditionalOnProperty(name = "langur.persistence.type", havingValue = "jpa")
+    public AgentRepository jpaAgentRepository(AgentJpaRepository jpaRepo) {
+        return new JpaAgentRepository(jpaRepo);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "langur.persistence.type", havingValue = "memory", matchIfMissing = true)
+    public AgentRepository inMemoryAgentRepository() {
+        return new InMemoryAgentRepository();
+    }
+}
+```
+
+> **生产建议**：使用 Liquibase 或 Flyway 进行版本化的数据库迁移管理，确保数据库 Schema 变更可追踪且可回滚。
 
 ### 6.5 多模态消息扩展
 
@@ -1060,12 +1302,21 @@ public class JpaAgentRepository implements AgentRepository {
 
 Langur 当前版本（v1.0）奠定了完整的架构基础，后续演进将沿以下方向推进：
 
-### 8.1 🗄️ 持久化升级（近期）
+### 8.1 🗄️ 持久化升级（已完成 ✅）
 
-- **目标**：将 `InMemory` 仓储替换为真实数据库实现
-- **方案**：实现 `JPA（MySQL/PostgreSQL）` 或 `MongoDB` 版本的 Repository
-- **优先级**：高，当前内存实现服务重启即丢失数据
-- **特点**：Domain 层代码无需修改，仅增加 Infrastructure 层实现
+- **已实现**：完整的 JPA 数据库实现，支持 MySQL/PostgreSQL
+- **架构**：
+  - 三个 JPA 实体（AgentDO、PlanDO、AgentRunTaskDO）自动进行 ORM 映射
+  - 三个对应的 JPA Repository 实现，保证 Domain 层零修改
+  - 自动的 Domain ↔ DO 双向转换，透明处理序列化
+  - 灵活的持久化配置，支持动态切换内存/数据库实现
+- **特点**：
+  - 生产级 ACID 保证，数据库事务隔离
+  - 支持复杂查询优化与索引管理
+  - 支持 Liquibase/Flyway 数据库版本管理
+  - 内存实现仍可用于开发测试，零依赖
+- **迁移**：通过 `@Primary` 注解或配置文件无缝切换，既有业务代码无需修改
+- **收益**：服务重启数据不丢失，支持多实例部署与数据共享
 
 ### 8.2 🤖 多 LLM 支持（已完成 ✅）
 
