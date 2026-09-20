@@ -9,6 +9,10 @@ import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.dto.AgentResult;
 import org.skylark.langur.application.service.AgentApplicationService;
 import org.skylark.langur.application.service.ToolRegistryService;
+import org.skylark.langur.domain.harness.execution.ExecutionLoopService;
+import org.skylark.langur.domain.harness.execution.DefaultLayerRouter;
+import org.skylark.langur.domain.harness.execution.ReActExecutionLoop;
+import org.skylark.langur.domain.harness.lifecycle.LifecycleHookEngine;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
@@ -23,8 +27,11 @@ import org.skylark.langur.domain.repository.AgentRepository;
 import org.skylark.langur.domain.repository.PlanRepository;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.domain.service.PlanningDomainService;
+import org.skylark.langur.infrastructure.harness.evaluation.LoggingEvaluationService;
+import org.skylark.langur.infrastructure.harness.state.InMemoryTaskStateRepository;
 import org.skylark.langur.infrastructure.persistence.InMemoryAgentRepository;
 import org.skylark.langur.infrastructure.persistence.InMemoryPlanRepository;
+import org.skylark.langur.infrastructure.spi.DefaultBizCodeRouter;
 
 import java.time.Instant;
 import java.util.List;
@@ -59,9 +66,16 @@ class AgentApplicationServiceTest {
         org.mockito.Mockito.when(toolProvider.getTools()).thenReturn(List.of(sampleTool));
         ToolRegistryService toolRegistryService = new ToolRegistryService(List.of(toolProvider));
         AgentAssembler assembler = new AgentAssembler();
+        LifecycleHookEngine hookEngine = new LifecycleHookEngine();
+        agentDomainService.attachHookEngine(hookEngine);
+        ExecutionLoopService executionLoopService = new ReActExecutionLoop(
+                agentDomainService, hookEngine,
+                new InMemoryTaskStateRepository(), new LoggingEvaluationService());
         agentApplicationService = new AgentApplicationService(
                 agentRepository, agentDomainService, planningDomainService,
-                toolRegistryService, assembler, planRepository);
+                toolRegistryService, assembler, planRepository, executionLoopService,
+                new DefaultLayerRouter(),
+                new DefaultBizCodeRouter(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
     }
 
     @Test

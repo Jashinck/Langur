@@ -1,1 +1,5 @@
+org/skylark/langur/config/HarnessConfiguration.class
+org/skylark/langur/config/DomainServiceConfiguration.class
+org/skylark/langur/config/ObservabilityConfiguration.class
+org/skylark/langur/config/LoggingSpanExporter.class
 org/skylark/langur/LangurApplication.class

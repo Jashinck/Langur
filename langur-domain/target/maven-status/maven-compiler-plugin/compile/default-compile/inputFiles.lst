@@ -1,23 +1,76 @@
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/Tool.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/execution/RunTaskStatus.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/PlanRepository.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentConfig.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/ToolDefinition.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/ToolResult.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/AgentRepository.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/Agent.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/ToolProvider.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/service/PlanningDomainService.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/AgentExecutedEvent.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentStatus.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentId.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/Plan.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/StepStatus.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/message/MessagePartType.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/LLMPort.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/AgentCreatedEvent.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/service/AgentDomainService.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/AgentRunTaskRepository.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/execution/AgentRunTask.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/DomainEvent.java
-/home/runner/work/Langur/Langur/Jashinck/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/PlanStep.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/service/PlanningDomainService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/ExecutionStatus.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/AgentContextRepository.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/AgentExecutedEvent.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/AuditRecord.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/state/TaskStateStatus.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/HookAction.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/HookResult.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/message/MessagePartType.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/MemoryLevel.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/ToolDefinition.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolDispatcher.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/vector/VectorMemoryService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/DefaultLayerRouter.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/tracing/ExecutionSpan.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/service/AgentDomainService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/PlanStep.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/RuntimeLayer.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolSource.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/LoopDetector.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/ExecutionTask.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/LifecycleHookEngine.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/state/TaskStateRepository.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/RetryPolicy.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/ReActExecutionLoop.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/ContextSanitizer.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/AgentContext.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/HookPoint.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/ExecutionLoopService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/AgentRepository.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/ContextAssembler.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/DefaultFallbackStrategy.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/vector/EmbeddingPort.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/tracing/SpanType.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/MemoryEntry.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/TaskProfile.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/ExecutionMetrics.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/state/StateSnapshot.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/spi/BizCodeRouter.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentId.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolCallRequest.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/vector/VectorRecord.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/LLMPort.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/vector/VectorStore.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolValidator.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/StepStatus.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/FallbackStrategy.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentConfig.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/tracing/ExecutionTracer.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/Tool.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/LayerRouter.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/PlanRepository.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/RiskLevel.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/HookContext.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/execution/RunTaskStatus.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/tool/ToolResult.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolCallResult.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/state/TaskState.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/Checksums.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolDefinitionEntity.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/DomainEvent.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ValidationResult.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/plan/Plan.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/port/ToolProvider.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/event/AgentCreatedEvent.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/AgentStatus.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/agent/Agent.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/EvaluationService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/lifecycle/LifecycleHook.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/RuntimeParadigm.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/execution/TerminationGate.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/repository/AgentRunTaskRepository.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/context/UserProfile.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/tool/ToolRegistry.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/harness/evaluation/MetricDimension.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-domain/src/main/java/org/skylark/langur/domain/model/execution/AgentRunTask.java

@@ -13,6 +13,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Consumer;
 
 @Slf4j
 public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutableLLMPort {
@@ -101,6 +103,45 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
         } catch (Exception e) {
             log.error("{} LLM completion failed", getProviderName(), e);
             return "Error: " + e.getMessage();
+        }
+    }
+
+    @Override
+    public void streamComplete(String systemPrompt, String model, String userMessage,
+                               Consumer<String> tokenConsumer) {
+        try {
+            ObjectNode requestBody = objectMapper.createObjectNode();
+            requestBody.put("model", resolveModel(model));
+            requestBody.put("stream", true);
+            ArrayNode messages = requestBody.putArray("messages");
+            messages.addObject().put("role", "system").put("content", systemPrompt);
+            messages.addObject().put("role", "user").put("content", userMessage);
+
+            webClient.post()
+                    .uri("/chat/completions")
+                    .header("Authorization", "Bearer " + providerProperties.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody.toString())
+                    .retrieve()
+                    .bodyToFlux(String.class)
+                    .toStream()
+                    .forEach(chunk -> extractStreamDelta(chunk).ifPresent(tokenConsumer));
+        } catch (Exception e) {
+            log.error("{} LLM stream failed", getProviderName(), e);
+            tokenConsumer.accept("Error: " + e.getMessage());
+        }
+    }
+
+    private Optional<String> extractStreamDelta(String chunk) {
+        try {
+            if (StringUtils.isBlank(chunk) || "[DONE]".equals(chunk.trim())) {
+                return Optional.empty();
+            }
+            JsonNode root = objectMapper.readTree(chunk);
+            String delta = root.at("/choices/0/delta/content").asText(null);
+            return StringUtils.isEmpty(delta) ? Optional.empty() : Optional.of(delta);
+        } catch (Exception e) {
+            return Optional.empty();
         }
     }
 

@@ -2,12 +2,11 @@ package org.skylark.langur.domain.service;
 
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.StepStatus;
-import org.springframework.stereotype.Service;
 
 /**
- * 规划领域服务 - 负责Plan的创建与管理
+ * 规划领域服务 - 负责Plan的创建与管理。
+ * <p>纯领域服务（无 Spring 注解），由 start 层通过 @Configuration 装配，保证 Domain 层零外部依赖（P1）。</p>
  */
-@Service
 public class PlanningDomainService {
 
     public Plan createPlan(String agentId) {

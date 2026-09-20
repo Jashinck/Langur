@@ -1,0 +1,13 @@
+package org.skylark.langur.domain.harness.lifecycle;
+
+/**
+ * 生命周期拦截点 - 6 阶段 × BEFORE/AFTER = 12 拦截点
+ */
+public enum HookPoint {
+    BEFORE_CONTEXT_ASSEMBLE, AFTER_CONTEXT_ASSEMBLE,
+    BEFORE_INFERENCE, AFTER_INFERENCE,
+    BEFORE_TOOL_CALL, AFTER_TOOL_CALL,
+    BEFORE_STATE_SAVE, AFTER_STATE_SAVE,
+    BEFORE_TERMINATE, AFTER_TERMINATE,
+    BEFORE_OUTPUT, AFTER_OUTPUT
+}

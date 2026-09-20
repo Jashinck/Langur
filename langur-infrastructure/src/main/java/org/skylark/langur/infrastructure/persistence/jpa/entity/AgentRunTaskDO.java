@@ -25,6 +25,9 @@ public class AgentRunTaskDO {
     private String status;
 
     @Lob
+    private String userMessage;
+
+    @Lob
     private String resultSummary;
 
     @Lob

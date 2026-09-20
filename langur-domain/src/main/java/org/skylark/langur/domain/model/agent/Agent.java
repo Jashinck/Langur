@@ -104,6 +104,29 @@ public class Agent {
         updatedAt = Instant.now();
     }
 
+    /**
+     * [L4 输出安全] 应用输出合规钩子（BEFORE_OUTPUT MODIFY）改写最终答案：
+     * 覆盖会话历史中最近一条 assistant 消息内容，使下游装配读到合规后的答案。
+     */
+    public void overrideFinalAnswer(String newAnswer) {
+        for (int i = conversationHistory.size() - 1; i >= 0; i--) {
+            Map<String, String> message = conversationHistory.get(i);
+            if ("assistant".equals(message.get("role"))) {
+                conversationHistory.set(i, Map.of("role", "assistant", "content", newAnswer));
+                break;
+            }
+        }
+        updatedAt = Instant.now();
+    }
+
+    /**
+     * [S] 断点续跑：从最近快照恢复迭代计数（T5）。
+     */
+    public void resumeIteration(int count) {
+        this.iterationCount = count;
+        updatedAt = Instant.now();
+    }
+
     public void markFailed(String error) {
         this.status = AgentStatus.FAILED;
         this.lastError = error;

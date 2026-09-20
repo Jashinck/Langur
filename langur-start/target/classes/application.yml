@@ -40,5 +40,55 @@ langur:
       fast: deepseek-chat
       powerful: gpt-4o
       cheap: qwen-max
+    # T15 模型矩阵：角色→模型映射（M1-M6）
+    role-models:
+      ROUTING: gpt-4o
+      EMBEDDING: text-embedding-3-small
+      RERANK: gpt-4o
+      ACTION: gpt-4o
+      REASONING: gpt-4o
+      LONG_CONTEXT: gemini-1.5-pro
+    # T15 降级链：主模型不可用时按序降级到备用模型
+    fallback-chains:
+      gpt-4o: [deepseek-chat, qwen-max]
+      gemini-1.5-pro: [gpt-4o]
   run-task:
     executor-size: 4
+  # T12 可观测生产化（默认关闭；开启后六类 Span 全链路埋点 + 四维指标 + 不可篡改审计）
+  observability:
+    enabled: false
+    service-name: langur
+    log-spans: true
+  # T13 API 治理链（默认关闭；开启后 鉴权→租户→限流→幂等→TraceId）
+  governance:
+    enabled: false
+    protected-prefix: /api/
+    idempotency-enabled: true
+    auth:
+      enabled: true
+      tokens: []
+      #  - token: ${LANGUR_API_TOKEN:}
+      #    tenant: tenant-a
+      #    user: user-1
+    rate-limit:
+      permits-per-minute: 600
+  # T10a REST API as Tool（默认关闭；启用后工具以 api:{service}:{operationId} 注册，经四层校验链 + SSRF 防护）
+  rest-api-tools:
+    enabled: false
+    credentials: []
+    #  - ref: demo-bearer
+    #    type: BEARER            # BEARER / API_KEY / BASIC
+    #    secret: ${DEMO_TOKEN:}
+    tools: []
+    #  - service-name: weather
+    #    operation-id: current
+    #    method: GET
+    #    url-template: https://api.weather.example/v1/current?city={city}
+    #    credential-ref: demo-bearer
+    #    allowed-hosts: [api.weather.example]
+    #    risk-level: LOW
+    #    input-schema:
+    #      type: object
+    #      properties:
+    #        city: { type: string }
+    #      required: [city]

@@ -13,5 +13,7 @@ public class RunAgentCommand {
     private final String userId;
     private final String tenantId;
     private final String sessionId;
+    /** 业务域标识，驱动 SPI 路由与范式路由（§11.2）；为空时回退 default。 */
+    private final String bizCode;
     private final List<MessagePartInput> messageParts;
 }
