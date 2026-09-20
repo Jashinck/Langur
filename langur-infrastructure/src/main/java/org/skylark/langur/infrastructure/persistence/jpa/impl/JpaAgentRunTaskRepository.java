@@ -43,6 +43,7 @@ public class JpaAgentRunTaskRepository implements AgentRunTaskRepository {
         entity.setUserId(task.getUserId());
         entity.setTenantId(task.getTenantId());
         entity.setSessionId(task.getSessionId());
+        entity.setUserMessage(task.getUserMessage());
         entity.setStatus(task.getStatus().name());
         entity.setResultSummary(task.getResultSummary());
         entity.setLastError(task.getLastError());
@@ -58,6 +59,7 @@ public class JpaAgentRunTaskRepository implements AgentRunTaskRepository {
                 entity.getUserId(),
                 entity.getTenantId(),
                 entity.getSessionId(),
+                entity.getUserMessage(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 RunTaskStatus.valueOf(entity.getStatus()),

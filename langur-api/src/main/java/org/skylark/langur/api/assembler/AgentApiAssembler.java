@@ -24,6 +24,7 @@ public class AgentApiAssembler {
                 .iterationCount(result.getIterationCount())
                 .toolCount(result.getToolCount())
                 .lastError(result.getLastError())
+                .answer(result.getAnswer())
                 .createdAt(result.getCreatedAt())
                 .updatedAt(result.getUpdatedAt())
                 .build();

@@ -14,6 +14,7 @@ public class AgentResult {
     private int iterationCount;
     private int toolCount;
     private String lastError;
+    private String answer;
     private String createdAt;
     private String updatedAt;
 }

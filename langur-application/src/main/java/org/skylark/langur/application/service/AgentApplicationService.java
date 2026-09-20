@@ -10,18 +10,32 @@ import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.dto.AgentResult;
 import org.skylark.langur.application.dto.PlanResult;
 import org.skylark.langur.application.dto.PlanStepResult;
+import org.skylark.langur.application.stream.StreamEventHandler;
 import org.skylark.langur.common.exception.AgentNotFoundException;
+import org.skylark.langur.common.spi.BizContext;
+import org.skylark.langur.domain.harness.evaluation.tracing.ExecutionSpan;
+import org.skylark.langur.domain.harness.evaluation.tracing.ExecutionTracer;
+import org.skylark.langur.domain.harness.evaluation.tracing.SpanType;
+import org.skylark.langur.domain.harness.execution.ExecutionLoopService;
+import org.skylark.langur.domain.harness.execution.ExecutionTask;
+import org.skylark.langur.domain.harness.execution.LayerRouter;
+import org.skylark.langur.domain.harness.execution.RuntimeParadigm;
+import org.skylark.langur.domain.harness.execution.TerminationGate;
+import org.skylark.langur.domain.harness.spi.BizCodeRouter;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
+import org.skylark.langur.domain.model.agent.AgentStatus;
 import org.skylark.langur.domain.model.message.MessagePartType;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.repository.AgentRepository;
 import org.skylark.langur.domain.repository.PlanRepository;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.domain.service.PlanningDomainService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -34,12 +48,27 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AgentApplicationService {
 
+    private static final String DEFAULT_BIZ_CODE = "default";
+
     private final AgentRepository agentRepository;
     private final AgentDomainService agentDomainService;
     private final PlanningDomainService planningDomainService;
     private final ToolRegistryService toolRegistryService;
     private final AgentAssembler agentAssembler;
     private final PlanRepository planRepository;
+    private final ExecutionLoopService executionLoopService;
+    private final LayerRouter layerRouter;
+    private final BizCodeRouter bizCodeRouter;
+
+    /** 全链路追踪器（T12）；可选注入，缺省 NOOP，产生 API 接入 Span。 */
+    private ExecutionTracer executionTracer = ExecutionTracer.NOOP;
+
+    @Autowired(required = false)
+    public void setExecutionTracer(ExecutionTracer executionTracer) {
+        if (executionTracer != null) {
+            this.executionTracer = executionTracer;
+        }
+    }
 
     public AgentResult createAgent(CreateAgentCommand command) {
         AgentConfig config = AgentConfig.builder()
@@ -63,6 +92,19 @@ public class AgentApplicationService {
     }
 
     public AgentResult runAgent(RunAgentCommand command) {
+        // [V] API 接入 Span（T12，§10.2）：包裹整个同步执行链路，traceId 由此贯穿
+        try (ExecutionSpan span = executionTracer.startSpan(SpanType.API, "agent.run")) {
+            span.setAttribute("agentId", command.getAgentId());
+            try {
+                return doRunAgent(command);
+            } catch (RuntimeException e) {
+                span.recordError(e);
+                throw e;
+            }
+        }
+    }
+
+    private AgentResult doRunAgent(RunAgentCommand command) {
         Agent agent = findAgent(command.getAgentId());
 
         agent.markRunning();
@@ -71,12 +113,23 @@ public class AgentApplicationService {
         Plan plan = planningDomainService.createPlan(agent.getId().getValue());
 
         try {
-            String finalAnswer = null;
-            while (finalAnswer == null && !agent.hasExceededMaxIterations()) {
-                finalAnswer = agentDomainService.executeReActStep(agent, plan);
-            }
-            if (finalAnswer == null) {
-                agent.markFailed("Max iterations exceeded");
+            // [E] 范式路由（T6/T9）：bizCode 经 SPI 上下文增强 + 决策引擎提示，再交 LayerRouter 决策
+            String bizCode = resolveBizCode(command);
+            BizContext bizContext = buildBizContext(agent, bizCode, resolvedUserMessage, command);
+            bizCodeRouter.contextEnrichers().forEach(enricher -> enricher.enrich(bizContext));
+            RuntimeParadigm paradigm = resolveEffectiveParadigm(
+                    layerRouter.paradigmOf(layerRouter.route(bizCode, resolvedUserMessage)));
+            // [E] 经 Harness 执行循环驱动：终止闸门 + 生命周期钩子 + 状态快照 + 指标观测
+            ExecutionTask task = ExecutionTask.create(
+                    agent.getId().getValue(),
+                    bizCode,
+                    paradigm,
+                    buildGate(agent.getConfig()));
+            executionLoopService.execute(task, agent, plan);
+            if (agent.getStatus() == AgentStatus.RUNNING) {
+                agent.markFailed(task.getTerminateReason() != null
+                        ? task.getTerminateReason()
+                        : "Max iterations exceeded");
             }
         } catch (Exception e) {
             log.error("Agent execution failed", e);
@@ -87,6 +140,71 @@ public class AgentApplicationService {
 
         agentRepository.save(agent);
         return agentAssembler.toResult(agent);
+    }
+
+    private TerminationGate buildGate(AgentConfig config) {
+        return TerminationGate.builder()
+                .maxRounds(config.getMaxIterations())
+                .maxTokens(config.getMaxTokens() > 0 ? (long) config.getMaxTokens() : 32_000L)
+                .maxTimeout(Duration.ofMinutes(5))
+                .maxCallsPerRound(5)
+                .build();
+    }
+
+    /**
+     * [E] 范式路由降级（T6）：Workflow / PlanAndExecute 引擎尚未实现，显式降级为 ReAct 并记录。
+     */
+    private RuntimeParadigm resolveEffectiveParadigm(RuntimeParadigm routed) {
+        if (routed == RuntimeParadigm.REACT) {
+            return routed;
+        }
+        log.warn("Runtime paradigm [{}] engine not implemented yet, degrade to REACT", routed);
+        return RuntimeParadigm.REACT;
+    }
+
+    /**
+     * [E] bizCode 解析（T9）：命令未携带时回退 default 业务域。
+     */
+    private String resolveBizCode(RunAgentCommand command) {
+        return StringUtils.isNotBlank(command.getBizCode()) ? command.getBizCode() : DEFAULT_BIZ_CODE;
+    }
+
+    /**
+     * [E] 构建 SPI 业务上下文（T9）：供上下文增强链与后续 SPI 路由使用。
+     */
+    private BizContext buildBizContext(Agent agent, String bizCode, String userMessage, RunAgentCommand command) {
+        return BizContext.builder()
+                .bizCode(bizCode)
+                .agentId(agent.getId().getValue())
+                .userId(command.getUserId())
+                .tenantId(command.getTenantId())
+                .sessionId(command.getSessionId())
+                .userMessage(userMessage)
+                .build();
+    }
+
+    /**
+     * 流式对话（§13.1 / T8）：message（逐块）→ summary → done。
+     * <p>复用同步入口的 Agent 加载与消息解析；逐块回调由调用方（SSE）承接。</p>
+     */
+    public void streamChat(RunAgentCommand command, StreamEventHandler handler) {
+        try {
+            Agent agent = findAgent(command.getAgentId());
+            agent.markRunning();
+            agent.addUserMessage(resolveUserMessage(command));
+            StringBuilder answer = new StringBuilder();
+            agentDomainService.streamFinalAnswer(agent, token -> {
+                answer.append(token);
+                handler.send("message", token);
+            });
+            agentRepository.save(agent);
+            handler.send("summary", "status=" + agent.getStatus().name() + ", length=" + answer.length());
+            handler.send("done", agent.getId().getValue());
+            handler.complete();
+        } catch (Exception e) {
+            log.error("Stream chat failed", e);
+            handler.fail(e);
+        }
     }
 
     public Optional<PlanResult> getLatestPlan(String agentId) {

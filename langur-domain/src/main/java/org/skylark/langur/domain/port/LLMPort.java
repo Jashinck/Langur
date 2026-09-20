@@ -17,6 +17,20 @@ public interface LLMPort {
 
     String complete(String systemPrompt, String model, String userMessage);
 
+    /**
+     * 流式补全（T8）：逐块回调 token，供 SSE 双入口消费。
+     * <p>默认降级为非流式一次性产出；OpenAI 兼容适配器覆写为真实 stream=true SSE 流。</p>
+     */
+    default void streamComplete(String systemPrompt,
+                                String model,
+                                String userMessage,
+                                java.util.function.Consumer<String> tokenConsumer) {
+        String full = complete(systemPrompt, model, userMessage);
+        if (full != null && !full.isEmpty()) {
+            tokenConsumer.accept(full);
+        }
+    }
+
     class LLMDecision {
         private final boolean finalAnswer;
         private final String thought;

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Component
 @Primary
@@ -31,6 +32,13 @@ public class LLMRouter implements LLMPort {
     public String complete(String systemPrompt, String model, String userMessage) {
         String resolvedModel = resolveModel(model);
         return route(resolvedModel).complete(systemPrompt, resolvedModel, userMessage);
+    }
+
+    @Override
+    public void streamComplete(String systemPrompt, String model, String userMessage,
+                               Consumer<String> tokenConsumer) {
+        String resolvedModel = resolveModel(model);
+        route(resolvedModel).streamComplete(systemPrompt, resolvedModel, userMessage, tokenConsumer);
     }
 
     private ModelRoutableLLMPort route(String model) {
