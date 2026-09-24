@@ -92,3 +92,20 @@ langur:
     #      properties:
     #        city: { type: string }
     #      required: [city]
+  # T10b MCP 集成（默认关闭；启用后按 servers 连接/发现工具，以 mcp:{server}:{tool} 注册，经四层校验链 + SSRF 防护）
+  # 复用 rest-api-tools.credentials 凭证库（credential-ref）；心跳保活 + 断线懒重连
+  mcp-tools:
+    enabled: false
+    heartbeat-seconds: 30
+    protocol-version: "2024-11-05"
+    servers: []
+    #  - name: filesystem
+    #    url: https://mcp.example.com/filesystem/rpc
+    #    credential-ref: demo-bearer
+    #    allowed-hosts: [mcp.example.com]
+    #    risk-level: LOW
+    #    timeout-seconds: 30
+    #    include-tools: []        # 为空表示发现全部远端工具
+  # T10c Skill 编排：无 YAML 配置，技能由实现 Skill 接口并标注 @SkillDef 的 Spring Bean 声明，
+  # 启动时以 skill:{name} 注册（source=SKILL），步骤类型支持 TOOL_CALL / CONDITION。
+

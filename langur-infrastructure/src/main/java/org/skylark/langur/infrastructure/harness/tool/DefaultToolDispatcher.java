@@ -23,7 +23,9 @@ import org.skylark.langur.domain.harness.tool.ValidationResult;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.model.tool.ToolResult;
 import org.skylark.langur.domain.port.ToolProvider;
+import org.skylark.langur.infrastructure.harness.tool.mcp.McpToolGateway;
 import org.skylark.langur.infrastructure.harness.tool.rest.RestApiToolGateway;
+import org.skylark.langur.infrastructure.harness.tool.skill.SkillToolGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -40,7 +42,8 @@ import java.util.concurrent.TimeoutException;
 /**
  * T 组件 - 工具统一路由调度器默认实现。
  * <p>流程：注册中心准入 → 四层校验链 → 按 toolSource 路由 → 沙箱化执行（超时硬约束）。
- * LOCAL/SPI 复用既有 {@link Tool} 执行器；MCP/REST_API/SKILL 为后续阶段的扩展路由点。</p>
+ * LOCAL/SPI 复用既有 {@link Tool} 执行器；REST_API/MCP/SKILL 分别委派各自网关（T10a/T10b/T10c），
+ * 网关未装配时对应来源返回未启用。</p>
  */
 @Slf4j
 @Component
@@ -51,6 +54,10 @@ public class DefaultToolDispatcher implements ToolDispatcher {
     private final List<ToolProvider> toolProviders;
     /** REST_API 路由网关（T10a）；可选注入，未装配时 REST_API 源返回未启用。 */
     private RestApiToolGateway restApiToolGateway;
+    /** MCP 路由网关（T10b）；可选注入，未装配时 MCP 源返回未启用。 */
+    private McpToolGateway mcpToolGateway;
+    /** SKILL 路由网关（T10c）；可选注入，未装配时 SKILL 源返回未启用。 */
+    private SkillToolGateway skillToolGateway;
     /** 全链路追踪器（T12）；可选注入，缺省 NOOP，产生 TOOL Span。 */
     private ExecutionTracer tracer;
     /** 评估观测服务（T12）；可选注入，缺省不审计，产生工具调用不可篡改审计。 */
@@ -72,6 +79,16 @@ public class DefaultToolDispatcher implements ToolDispatcher {
     @Autowired(required = false)
     public void setRestApiToolGateway(RestApiToolGateway restApiToolGateway) {
         this.restApiToolGateway = restApiToolGateway;
+    }
+
+    @Autowired(required = false)
+    public void setMcpToolGateway(McpToolGateway mcpToolGateway) {
+        this.mcpToolGateway = mcpToolGateway;
+    }
+
+    @Autowired(required = false)
+    public void setSkillToolGateway(SkillToolGateway skillToolGateway) {
+        this.skillToolGateway = skillToolGateway;
     }
 
     @Autowired(required = false)
@@ -105,8 +122,8 @@ public class DefaultToolDispatcher implements ToolDispatcher {
         return observe(request, definition, start, () -> switch (definition.getSource()) {
             case LOCAL, SPI -> executeLocal(request, definition, start);
             case REST_API -> executeRestApi(request, definition, start);
-            case MCP, SKILL -> ToolCallResult.failure(
-                    "Tool source [" + definition.getSource() + "] routing not yet enabled", elapsed(start));
+            case MCP -> executeMcp(request, definition, start);
+            case SKILL -> executeSkill(request, definition, start);
         });
     }
 
@@ -157,6 +174,40 @@ public class DefaultToolDispatcher implements ToolDispatcher {
         } catch (Exception e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             return ToolCallResult.failure("REST API tool error: " + cause.getMessage(), elapsed(start));
+        }
+    }
+
+    private ToolCallResult executeMcp(ToolCallRequest request, ToolDefinitionEntity definition, long start) {
+        String toolId = definition.getToolId();
+        if (mcpToolGateway == null || !mcpToolGateway.supports(toolId)) {
+            return ToolCallResult.failure("MCP gateway not available for tool: " + toolId, elapsed(start));
+        }
+        long timeoutMillis = definition.getTimeout() != null ? definition.getTimeout().toMillis() : 30_000L;
+        try {
+            String body = runGeneric(() -> mcpToolGateway.execute(toolId, request.getArguments()), timeoutMillis);
+            return ToolCallResult.success(body, elapsed(start));
+        } catch (TimeoutException e) {
+            return ToolCallResult.failure("MCP tool timeout: " + toolId, elapsed(start));
+        } catch (Exception e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            return ToolCallResult.failure("MCP tool error: " + cause.getMessage(), elapsed(start));
+        }
+    }
+
+    private ToolCallResult executeSkill(ToolCallRequest request, ToolDefinitionEntity definition, long start) {
+        String toolId = definition.getToolId();
+        if (skillToolGateway == null || !skillToolGateway.supports(toolId)) {
+            return ToolCallResult.failure("SKILL gateway not available for tool: " + toolId, elapsed(start));
+        }
+        long timeoutMillis = definition.getTimeout() != null ? definition.getTimeout().toMillis() : 60_000L;
+        try {
+            String body = runGeneric(() -> skillToolGateway.execute(toolId, request.getArguments()), timeoutMillis);
+            return ToolCallResult.success(body, elapsed(start));
+        } catch (TimeoutException e) {
+            return ToolCallResult.failure("SKILL execution timeout: " + toolId, elapsed(start));
+        } catch (Exception e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            return ToolCallResult.failure("SKILL execution error: " + cause.getMessage(), elapsed(start));
         }
     }
 

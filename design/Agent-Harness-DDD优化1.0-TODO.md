@@ -102,7 +102,7 @@
 - **验收**：提供示例业务域接入（bizCode=demo），注入专属工具与 Prompt 并跑通。
 
 ### T10. MCP / REST_API / SKILL 工具源
-- [x] T10a 已完成（2026-09-21）；T10b/T10c 保留
+- [x] T10a 已完成（2026-09-21）；T10b/T10c 已完成（2026-09-25）
 - **问题**：`DefaultToolDispatcher` 对三类来源返回"未启用"；§7.3-7.5 能力缺失。
 - **建议拆分**（可分别派发）：
   - T10a. REST API as Tool：OpenAPI Spec 解析注册 + HTTP 执行器 + CredentialVault（BEARER/API_KEY 先行）+ SSRF 防护。
@@ -182,3 +182,6 @@
 | 2026-09-21 | T14 | domain `context/vector` 新增 `EmbeddingPort`/`VectorStore` 端口 + `VectorRecord`/`VectorMemoryService`（cosine Top-K + Token 预算截断 + L4 知识记忆产出）；infra `LexicalEmbeddingPort`（分词哈希词袋 L2 归一化）+ `InMemoryVectorStore`（memory 默认）+ `PgVectorStore`（pgvector 条件装配，`<=>` cosine + HNSW）+ `VectorMath`；start 装配 `VectorMemoryService` Bean；`VectorMemoryServiceTest` 6 用例（相似度排序/namespace 隔离/Token 预算/UPSERT/L4/边界） |
 | 2026-09-21 | T15 | infra `llm` 新增 `ModelRole`（M1-M6：ROUTING/EMBEDDING/RERANK/ACTION/REASONING/LONG_CONTEXT）+ `LlmGateway`（角色→模型解析 + 主备降级链 withFallback，同步/决策/流式）；`LlmProperties` 新增 roleModels/fallbackChains/fallbacksOf；`LlmGatewayTest` 4 用例（角色映射 + 主模型不可用自动降级） |
 | 2026-09-21 | P2 验收 | 94 测试全绿（domain 39 + infra 44 + start 11），`mvn clean test` BUILD SUCCESS；T9/T10a/T11/T12/T13/T14/T15 均落地（T10b MCP、T10c Skill 编排作为后续独立任务保留），P2 阶段闭环 |
+| 2026-09-25 | T10b | infra `harness/tool/mcp` 包：`McpToolProperties`（`langur.mcp-tools`，默认关闭）+ `McpToolSpec`/`McpToolCatalog`（工具 ID `mcp:{server}:{tool}`）+ JSON-RPC 传输层（`McpTransport` 接口 + `HttpMcpTransport` WebClient 实现，复用 `SsrfGuard`/`CredentialVault`，兼容 application/json 与 SSE `data:` 分帧）+ `McpClient`（initialize 握手 / tools-list 发现 / tools-call 抽取文本 / ping 心跳）+ `McpClientManager`（连接/发现/心跳保活/断线懒重连，implements `McpToolGateway`，@PostConstruct 装载 @PreDestroy 停机）；`DefaultToolDispatcher` 新增 `McpToolGateway` 可选注入与 `case MCP -> executeMcp`（复用 `runGeneric` 沙箱限时）；application.yml 增 `langur.mcp-tools` 配置块；`McpClientTest` 5 + `McpClientManagerTest` 4 + `McpToolRoutingTest` 3 |
+| 2026-09-25 | T10c | infra `harness/tool/skill` 包：`@SkillDef` 注解 + `Skill` 契约 + `StepType`(TOOL_CALL/CONDITION) + `SkillStep`/`SkillSpec`/`SkillCatalog`（工具 ID `skill:{name}`）+ `SkillExpressionResolver`（安全最小集占位符 `${input.x}`/`${step.field}` 解析 + 六种比较运算符条件求值，无脚本引擎杜绝注入）+ `SkillExecutor`（顺序驱动，TOOL_CALL 回派 `ToolDispatcher` 形成嵌套四层校验，CONDITION 跳转/END，步数硬上限防环）+ `DefaultSkillToolGateway`（`@Lazy` 注入 ToolDispatcher 打破构造期循环）+ `SkillRegistrar`（@PostConstruct 扫描 `@SkillDef` Bean 注册 source=SKILL）；`DefaultToolDispatcher` 新增 `SkillToolGateway` 可选注入与 `case SKILL -> executeSkill`；`SkillExecutorTest` 6 + `SkillRegistrarTest` 2 + `SkillToolRoutingTest` 3 |
+| 2026-09-25 | T10b/T10c 验收 | 117 测试全绿（domain 39 + infra 67 + start 11，新增 23），`mvn clean test` BUILD SUCCESS；打包后启动 2.1s，MCP/SKILL/REST 三源默认关闭空转无副作用，`@Lazy` 打破调度器↔技能网关循环依赖，上下文装配无异常，T10 全部子项闭环 |
