@@ -9,42 +9,47 @@ import org.apache.commons.lang3.StringUtils;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Google Generative REST 适配器模板（H13.1）- 由 {@code ModelProviderFactory} 按
+ * {@code type=gemini} 配置构造，不再每厂硬编码 @ConditionalOnProperty Bean。
+ */
 @Slf4j
-@Component
-@ConditionalOnProperty(prefix = "langur.llm.providers.gemini", name = "enabled", havingValue = "true")
 public class GeminiLLMAdapter implements ModelRoutableLLMPort {
 
-    private static final String PROVIDER = "gemini";
-    private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
-
+    private final String providerName;
+    private final List<String> modelPrefixes;
     private final ObjectMapper objectMapper;
     private final WebClient webClient;
     private final LlmProperties.ProviderProperties providerProperties;
 
-    public GeminiLLMAdapter(LlmProperties llmProperties, ObjectMapper objectMapper) {
+    public GeminiLLMAdapter(String providerName,
+                            LlmProperties.ProviderProperties providerProperties,
+                            String defaultBaseUrl,
+                            List<String> modelPrefixes,
+                            ObjectMapper objectMapper) {
+        this.providerName = providerName;
+        this.modelPrefixes = modelPrefixes;
         this.objectMapper = objectMapper;
-        this.providerProperties = llmProperties.getProvider(PROVIDER);
+        this.providerProperties = providerProperties;
         this.webClient = WebClient.builder()
-                .baseUrl(StringUtils.defaultIfBlank(providerProperties.getBaseUrl(), DEFAULT_BASE_URL))
+                .baseUrl(StringUtils.defaultIfBlank(providerProperties.getBaseUrl(), defaultBaseUrl))
                 .build();
     }
 
     @Override
     public String getProviderName() {
-        return PROVIDER;
+        return providerName;
     }
 
     @Override
     public boolean supportsModel(String model) {
-        return model != null && model.startsWith("gemini-");
+        return ModelPrefixes.matches(model, modelPrefixes, providerProperties.getModel());
     }
 
     @Override

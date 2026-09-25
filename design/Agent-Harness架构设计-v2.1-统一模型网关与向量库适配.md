@@ -102,7 +102,7 @@ VectorStore（domain 端口，P3）              EmbeddingPort（domain 端口�
 
 ### 2.2 增量设计
 
-#### ① 配置驱动的 Provider 类型工厂（核心）
+#### ① 配置驱动的 Provider 类型工厂（核心）✅ 已落地（H13.1，2026-09-25）
 
 `ProviderProperties` 扩展两字段：
 

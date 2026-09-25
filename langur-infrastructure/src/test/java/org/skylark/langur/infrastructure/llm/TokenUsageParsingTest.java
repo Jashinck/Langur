@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -15,7 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class TokenUsageParsingTest {
 
-    private final OpenAILLMAdapter adapter = new OpenAILLMAdapter(new LlmProperties(), new ObjectMapper());
+    private final AbstractOpenAICompatibleLLMAdapter adapter = new ConfigurableOpenAICompatibleLLMAdapter(
+            "openai", new LlmProperties.ProviderProperties(), "https://api.openai.com/v1",
+            List.of("gpt-"), new ObjectMapper());
 
     @Test
     void shouldParseUsageOnFinalAnswer() throws Exception {

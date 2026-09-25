@@ -21,16 +21,37 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
 
     private final ObjectMapper objectMapper;
     private final WebClient webClient;
-    private final LlmProperties.ProviderProperties providerProperties;
+    private final String providerName;
+    private final List<String> modelPrefixes;
+    protected final LlmProperties.ProviderProperties providerProperties;
 
-    protected AbstractOpenAICompatibleLLMAdapter(LlmProperties llmProperties,
-                                                 ObjectMapper objectMapper,
-                                                 String providerName) {
+    /**
+     * 配置驱动构造（H13.1）- 由 {@code ModelProviderFactory} 按 provider 配置实例化，
+     * 不再依赖 @ConditionalOnProperty 每厂一类。
+     */
+    protected AbstractOpenAICompatibleLLMAdapter(String providerName,
+                                                 LlmProperties.ProviderProperties providerProperties,
+                                                 String defaultBaseUrl,
+                                                 List<String> modelPrefixes,
+                                                 ObjectMapper objectMapper) {
+        this.providerName = providerName;
         this.objectMapper = objectMapper;
-        this.providerProperties = llmProperties.getProvider(providerName);
+        this.providerProperties = providerProperties;
+        this.modelPrefixes = modelPrefixes;
         this.webClient = WebClient.builder()
-                .baseUrl(StringUtils.defaultIfBlank(providerProperties.getBaseUrl(), defaultBaseUrl()))
+                .baseUrl(StringUtils.defaultIfBlank(providerProperties.getBaseUrl(), defaultBaseUrl))
                 .build();
+    }
+
+    @Override
+    public String getProviderName() {
+        return providerName;
+    }
+
+    /** 前缀配置化匹配（H13.3）：配置前缀 → provider.model 派生前缀。 */
+    @Override
+    public boolean supportsModel(String model) {
+        return ModelPrefixes.matches(model, modelPrefixes, providerProperties.getModel());
     }
 
     @Override
@@ -187,6 +208,4 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
     protected String resolveModel(String model) {
         return StringUtils.defaultIfBlank(model, providerProperties.getModel());
     }
-
-    protected abstract String defaultBaseUrl();
 }
