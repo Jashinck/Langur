@@ -167,9 +167,11 @@ DecisionAnswer    { DecisionType type;
 
 | 插入点 | 机制 | 类型 | 收益 | 红线 |
 |--------|------|------|------|------|
-| **① 阶段决策闸门** | `WorkflowStage` 增可选 `decisionGate`（一个 `DecisionQuestion` + 阈值 + 路由动作：run-next / skip / branch-to-stage / abort / require-approval）。阶段产出后由决策平面判定走向 | `choice`/`noul` | **跳过不必要的昂贵 LLM 阶段**（提效）；确定性（结果是带置信度、被记录的判定，非 LLM 自由发挥） | 低置信 → 走默认顺序（兜底） |
-| **② 审批风险分级** | 对**非 CRITICAL** 审批闸门，用 `score` 风险三分流：低风险→策略内自动放行快路；中→人审；高/低置信→人审或中断 | `score` | 长任务（合同审查特批项）**吞吐提升** | ⚠️ **CRITICAL 恒人审**：Jev 只产出"风险摘要 + 建议"加速人工，**绝不自动放行**（只能收紧不能放松，P11/P12/R-G） |
-| **③ 产物验收闸门** | `task.addArtifact(...)` 前用 `score` 判完整/合规，低于阈值→有界重试该阶段或打标 | `score` | 多产物（审查报告/特批项/PRD）**质量提升**（提准） | 重试受步数/Token 闸门约束 |
+| **① 阶段决策闸门** ✅（J4，2026-09-26） | `WorkflowStage` 增可选 `decisionGate`（一个 `DecisionQuestion` + 阈值 + 路由动作：run-next / skip / branch-to-stage / abort / require-approval）。阶段产出后由决策平面判定走向 | `choice`/`noul` | **跳过不必要的昂贵 LLM 阶段**（提效）；确定性（结果是带置信度、被记录的判定，非 LLM 自由发挥） | 低置信 → 走默认顺序（兜底） |
+| **② 审批风险分级** ✅（J5，2026-09-26） | 对**非 CRITICAL** 审批闸门，用 `score` 风险三分流：低风险→策略内自动放行快路；中→人审；高/低置信→人审或中断 | `score` | 长任务（合同审查特批项）**吞吐提升** | ⚠️ **CRITICAL 恒人审**：Jev 只产出"风险摘要 + 建议"加速人工，**绝不自动放行**（只能收紧不能放松，P11/P12/R-G） |
+| **③ 产物验收闸门** ✅（J6，2026-09-26） | `task.addArtifact(...)` 前用 `score` 判完整/合规，低于阈值→有界重试该阶段或打标 | `score` | 多产物（审查报告/特批项/PRD）**质量提升**（提准） | 重试受步数/Token 闸门约束 |
+
+> **✅ 落地说明（J4–J6，2026-09-26）**：domain 新增 `StageDecisionGate`（闸门定义，配置驱动 P9：`langur.workflow.definitions[].stages[].decision-gate.{key,type,instructions,criteria,threshold,branch-to}`，经 `WorkflowDefinitionRegistrar` 装载）与 `GateRoute.of(answer, threshold)`（domain 侧分流，P2：不依赖 infra `ThresholdRouter`，语义对齐）；`WorkflowExecutionLoop` 织入可选 `DecisionPort`（start `HarnessConfiguration.attachDecisionPlane`，缺省不织入=行为与 v2.0 一致）。①：skip 跳过下一阶段并计入 completed（恢复续跑确定性）、branch 带防环预算跳转、abort 中断、require-approval 建 `workflow-gate:<stageId>` 人审单挂起（恢复时 DENIED/PENDING 不得越过，只收紧）；低置信/异常/缺失 → 默认顺序（P12③）。②：`WorkflowStage.critical` 标记（配置 `critical: true`），CRITICAL 恒人审且**决策平面不被调用**；非 CRITICAL 安全分与置信均 ≥ approval-auto(0.90) → 自动放行并留 APPROVED 审批单（decisionBy=decision-plane 可溯源）。③：`Artifact` 增 `accepted/reviewNote`，低于 artifact-accept(0.80) → 至多 1 次有界重试（受终止闸门约束）→ 仍不达标打标不阻断。三处分流均发 `decision_route_counts`（skip/branch/abort/require_approval/fail_closed/approve/artifact_accept/artifact_reject…）。
 
 ### 3.2 Hybrid 模式（Workflow → Plan → ReAct 三层分权）
 
@@ -366,6 +368,8 @@ langur:
 > **D1 进度（2026-09-26）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2 ✅（`RecordingDecisionPort` 录制 + 决策维度指标 + 审计 checksum，7 测全绿）；J3 ✅（`DecisionConfiguration` 装配 + `ThresholdRouter`/`CachingDecisionPort`/`LocalDecisionAdapter`/`DataResidencyDecisionPort` + `DecisionProperties`，19 测全绿，默认关/开启双冒烟 UP）。**N1 完成，达成熟度 D1（Jev advisory）**；下一步 N2（J4–J10，执行集成 → D2）。
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
+
+> **D2 进度（2026-09-26）**：J4 ✅（Workflow 阶段决策闸门，插入点 ①）、J5 ✅（审批风险分级，插入点 ②，CRITICAL 恒人审）、J6 ✅（产物验收闸门，插入点 ③）——Workflow 三插入点全部落地，domain 140 测全绿 + 双冒烟 UP；J7–J10（Hybrid/ReAct/Skill，插入点 ④–⑩）待落地，完成后达 D2。
 
 > **D2→D3 的跃迁 = 决策平面从"人工标定的判定器"进化为"自我优化的判定器"**，这正是 Jev 与 RSI 整合的终局价值，也是 P11/P12/R-G 必须全程在场的原因。
 

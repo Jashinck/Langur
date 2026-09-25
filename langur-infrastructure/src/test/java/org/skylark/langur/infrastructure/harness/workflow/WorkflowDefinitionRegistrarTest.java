@@ -97,6 +97,70 @@ class WorkflowDefinitionRegistrarTest {
         assertEquals(0, registrar.populate(new DefaultWorkflowRepository(), new WorkflowProperties()));
     }
 
+    @Test
+    void shouldMapDecisionGateAndCriticalFlagFromConfig() {
+        WorkflowProperties.DecisionGateProps gate = new WorkflowProperties.DecisionGateProps();
+        gate.setKey("continue");
+        gate.setType("choice");
+        gate.setInstructions("阶段产出后应如何继续？");
+        gate.setCriteria(java.util.Map.of("skip", "下一阶段不必要", "branch-to-stage", "跳转专项"));
+        gate.setThreshold(0.6);
+        gate.setBranchTo("s3");
+        WorkflowProperties.StageProps gated = stage("s1", "分诊", false, null, null);
+        gated.setDecisionGate(gate);
+        WorkflowProperties.StageProps critical = stage("review", "CRITICAL 特批", true, null, null);
+        critical.setCritical(true);
+
+        WorkflowProperties.DefinitionProps def = new WorkflowProperties.DefinitionProps();
+        def.setBizCode("gate-flow");
+        def.setStages(List.of(gated, critical));
+        WorkflowProperties props = new WorkflowProperties();
+        props.setDefinitions(List.of(def));
+
+        List<WorkflowStage> stages = registrar.toDefinitions(props).get(0).getStages();
+
+        // J4：decisionGate 配置装载为领域闸门（P9），阈值/分支目标/判据完整映射
+        assertTrue(stages.get(0).hasDecisionGate());
+        var mapped = stages.get(0).getDecisionGate();
+        assertEquals("continue", mapped.key());
+        assertEquals(org.skylark.langur.domain.harness.decision.DecisionType.CHOICE, mapped.type());
+        assertEquals(0.6, mapped.threshold());
+        assertEquals("s3", mapped.branchStageId());
+        assertEquals("下一阶段不必要", mapped.criteria().get("skip"));
+        assertEquals("continue", mapped.toQuestion().key());
+
+        // J5：critical 标记映射（P12② 恒人审）
+        assertTrue(stages.get(1).isCritical());
+        assertTrue(stages.get(1).isRequiresApproval());
+        assertFalse(stages.get(1).hasDecisionGate());
+    }
+
+    @Test
+    void shouldIgnoreIncompleteDecisionGateAndDefaultThreshold() {
+        WorkflowProperties.DecisionGateProps noInstructions = new WorkflowProperties.DecisionGateProps();
+        noInstructions.setKey("k");
+        WorkflowProperties.StageProps stageA = stage("s1", "x", false, null, null);
+        stageA.setDecisionGate(noInstructions);
+
+        WorkflowProperties.DecisionGateProps minimal = new WorkflowProperties.DecisionGateProps();
+        minimal.setKey("k2");
+        minimal.setInstructions("如何继续？");
+        WorkflowProperties.StageProps stageB = stage("s2", "y", false, null, null);
+        stageB.setDecisionGate(minimal);
+
+        WorkflowProperties.DefinitionProps def = new WorkflowProperties.DefinitionProps();
+        def.setBizCode("gate-flow");
+        def.setStages(List.of(stageA, stageB));
+        WorkflowProperties props = new WorkflowProperties();
+        props.setDefinitions(List.of(def));
+
+        List<WorkflowStage> stages = registrar.toDefinitions(props).get(0).getStages();
+        assertFalse(stages.get(0).hasDecisionGate(), "instructions 缺失 → 闸门不生效（回落默认顺序，P10）");
+        assertTrue(stages.get(1).hasDecisionGate());
+        assertEquals(org.skylark.langur.domain.harness.decision.DecisionThresholds.DEFAULT_ROUTING,
+                stages.get(1).getDecisionGate().threshold(), "阈值缺省 → DD11 routing 0.75");
+    }
+
     private WorkflowProperties.StageProps stage(String id, String instruction, boolean approval,
                                                 String artifactName, String artifactType) {
         WorkflowProperties.StageProps stage = new WorkflowProperties.StageProps();

@@ -30,10 +30,12 @@ import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.harness.tool.ToolDispatcher;
 import org.skylark.langur.domain.harness.workflow.DefaultWorkflowRepository;
 import org.skylark.langur.domain.harness.workflow.WorkflowRepository;
+import org.skylark.langur.domain.port.DecisionPort;
 import org.skylark.langur.domain.port.DefaultFallbackStrategy;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.infrastructure.cache.CacheProperties;
 import org.skylark.langur.infrastructure.harness.context.vector.VectorProperties;
+import org.skylark.langur.infrastructure.harness.decision.DecisionProperties;
 import org.skylark.langur.infrastructure.harness.execution.LlmPlanner;
 import org.skylark.langur.infrastructure.harness.execution.LockingExecutionLoopService;
 import org.skylark.langur.infrastructure.harness.workflow.WorkflowDefinitionRegistrar;
@@ -155,11 +157,14 @@ public class HarnessConfiguration {
                                                        TaskStateRepository taskStateRepository,
                                                        EvaluationService evaluationService,
                                                        LifecycleHookEngine hookEngine,
-                                                       ExecutionProgressPort progressPort) {
+                                                       ExecutionProgressPort progressPort,
+                                                       ObjectProvider<DecisionPort> decisionPortProvider,
+                                                       ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
         WorkflowExecutionLoop loop = new WorkflowExecutionLoop(reActExecutionLoop, RuntimeParadigm.REACT,
                 workflowRepository, approvalPortProvider.getIfAvailable(), taskStateRepository,
                 evaluationService, hookEngine);
         loop.attachProgressPort(progressPort);
+        attachDecisionPlane(loop, decisionPortProvider, decisionPropertiesProvider);
         return loop;
     }
 
@@ -174,12 +179,31 @@ public class HarnessConfiguration {
                                                      TaskStateRepository taskStateRepository,
                                                      EvaluationService evaluationService,
                                                      LifecycleHookEngine hookEngine,
-                                                     ExecutionProgressPort progressPort) {
+                                                     ExecutionProgressPort progressPort,
+                                                     ObjectProvider<DecisionPort> decisionPortProvider,
+                                                     ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
         WorkflowExecutionLoop loop = new WorkflowExecutionLoop(planAndExecuteExecutionLoop,
                 RuntimeParadigm.PLAN_AND_EXECUTE, workflowRepository, approvalPortProvider.getIfAvailable(),
                 taskStateRepository, evaluationService, hookEngine);
         loop.attachProgressPort(progressPort);
+        attachDecisionPlane(loop, decisionPortProvider, decisionPropertiesProvider);
         return loop;
+    }
+
+    /**
+     * J4–J6：把决策平面（J3 @Primary 装饰链）与置信阈值织入 Workflow/Hybrid 循环。
+     * 决策平面关闭（缺省）时 provider 取空 → 不织入，全部插入点走默认顺序/人审兜底，行为与 v2.0 一致（P12①）。
+     */
+    private static void attachDecisionPlane(WorkflowExecutionLoop loop,
+                                            ObjectProvider<DecisionPort> decisionPortProvider,
+                                            ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
+        DecisionPort decisionPort = decisionPortProvider.getIfAvailable();
+        if (decisionPort == null) {
+            return;
+        }
+        DecisionProperties properties = decisionPropertiesProvider.getIfAvailable();
+        loop.attachDecisionPlane(decisionPort,
+                properties != null ? properties.getThresholds().toDomain() : null);
     }
 
     /**

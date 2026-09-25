@@ -4,7 +4,7 @@
 > **基线**：RoadMap 2.0 全部 H1–H10 已完成并提交（2026-09-25），六组件 As-Built ~85%，320 测试全绿；v2.0 六组件拓扑继续有效，本轮**只增量**新增"决策平面"能力面并承接 RSI（R\*）
 > **性质**：执行级路线图（可逐项派发）。本轮使用 **`J*`（决策平面 / Jev 接入）** 编号 + **承接 `R*`（RSI 演进，来自 RoadMap 2.0）** + **保留 `H11/H12`（治理/扩展，待派发）**
 > **使用方式**：逐项派发（如"完成 J1"），完成后将 `[ ]` 改为 `[x]` 并在 §11"完成记录"补日期与说明；每完成一项同步更新 v3.0 架构文档 §3/§4 落点标注与 §9 成熟度
-> **状态**：**N1（J1–J3）已完成（2026-09-26），达成熟度 D1（Jev advisory）**；N2（J4–J10）待派发。决策平面 Phase 0（N1–N2）为纯 H 类能力接入，不触发 P11；RSI（N3–N5）**沿用当前暂停状态**，解锁前不派发
+> **状态**：**N1（J1–J3）已完成（2026-09-26），达成熟度 D1（Jev advisory）**；**N2 进行中：J4–J6（Workflow 三插入点）已完成（2026-09-26）**，J7–J10 待派发。决策平面 Phase 0（N1–N2）为纯 H 类能力接入，不触发 P11；RSI（N3–N5）**沿用当前暂停状态**，解锁前不派发
 
 ---
 
@@ -129,7 +129,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 > **总原则（v3.0 §3）**：决策平面**只改"判定"，不改"生成"**；每个插入点都带兜底与阈值；对安全闸门恒 advisory（P12）。用户重点关注 **Workflow（J4–J6）与 Hybrid（J7）**，故列为 P1。
 
 ### J4. Workflow 阶段决策闸门（插入点 ①）
-- [ ] 待派发
+- [x] 已完成（2026-09-26）
 - **现状/问题**：`WorkflowExecutionLoop`/`WorkflowStage` 是固定阶段序列，只有 `requiresApproval` 闸门，阶段间无条件分支——简单任务也跑完全部昂贵 LLM 阶段。
 - **改动要点**：
   - `WorkflowStage` 增可选 `decisionGate`（一个 `DecisionQuestion` + 阈值 + 路由动作：`run-next / skip / branch-to-stage / abort / require-approval`）；阶段产出后经 `DecisionPort` 判定走向（`choice`/`noul`）。
@@ -139,7 +139,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 - **依赖**：J1 J2 J3 | **优先级**：P1 | **估算**：M
 
 ### J5. Workflow 审批风险分级（插入点 ②，非 CRITICAL）
-- [ ] 待派发
+- [x] 已完成（2026-09-26）
 - **现状/问题**：`CriticalApprovalValidator`（H10）对 CRITICAL 一律挂起人审——**一刀切**，低风险也排队，长任务（合同审查特批项）吞吐受限。
 - **改动要点**：
   - 对**非 CRITICAL** 审批闸门，用 `score` 做风险三分流：低风险 → 策略内自动放行快路；中 → 人审；高 / 低置信 → 人审或中断。
@@ -149,7 +149,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 - **依赖**：J3 H10 | **优先级**：P1 | **估算**：M
 
 ### J6. Workflow 产物验收闸门（插入点 ③）
-- [ ] 待派发
+- [x] 已完成（2026-09-26）
 - **现状/问题**：`task.addArtifact(...)` 无质量门，多产物（审查报告/特批项/PRD）质量参差。
 - **改动要点**：
   - `addArtifact` 前用 `score` 判完整/合规，低于阈值（`artifact-accept`，默认 0.80）→ **有界重试**该阶段或打标（`accepted=false` + 原因）。
@@ -331,3 +331,4 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 | 2026-09-25 | J1 | `DecisionPort` 契约落 domain（`port/DecisionPort` + `harness/decision/{DecisionRequest,DecisionQuestion,DecisionType(choice/noul/score),DecisionResponse,DecisionAnswer,DecisionThresholds}`，纯 JDK 零外部依赖，P1 已断言无 Spring/Jackson import）；usage 复用 H1 `LLMPort.TokenUsage`；infra `TypeSafeDecisionAdapter`（WebClient POST `{state,model,questions{noul\|choice\|score,instructions,criteria}}`，批量投机扇出 state 只发一次，解析 choice/value+confidence+distribution+usage，异常/超时/无问题委派兜底不抛出）+ `RuleFallbackDecisionAdapter`（复用 H10 `OutputContentReviewer`，confidence 恒 0 → J3 ThresholdRouter fail-closed）；DD13 domain 新端口、infra 适配既有 `DecisionEngineSPI`（J3 装配）；适配器不带 `@Component`，J3 条件装配。新增 17 测（domain 7 + infra 10，HttpServer 离线桩），`mvn clean test` 全绿（infra 271→281）。未改装配，无需冒烟 |
 | 2026-09-26 | J2 | `RecordingDecisionPort` 装饰器（包裹后端，判定原样透传）：`record=true` 时把 request/response/latencyMillis 封为 S 组件 `StateSnapshot` 交 `DecisionTrajectoryRecorder` 落轨迹（R0 前向兼容 C2/DD12；缺省实现 `LoggingDecisionTrajectoryRecorder`，J3 装配）；决策维度指标经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 MeterRegistry（新增 `MetricDimension.DECISION`，v3.0 §6.1）：`decision_latency`/`decision_confidence`(均值)/`decision_fallback_rate`(依 RuleFallback confidence 恒 0 契约推断降级)/`decision_cost`(输入 token，复用 H1)；`decision_route_counts` 留 J3；判定（含 confidence/distribution）经 `Checksums.sha256` 写审计链。录制/指标/审计失败静默降级（P10）。新增 7 测（SimpleMeterRegistry + 捕获桩），`mvn clean test` 全绿（domain 121→128、infra 281→288）。未改装配，无需冒烟 |
 | 2026-09-26 | J3 | **N1 完成，达成熟度 D1（Jev advisory）**。start `DecisionConfiguration`（`@ConditionalOnProperty langur.decision.enabled=true`，默认关闭不产 Bean、行为与 v2.0 一致，P12①）经 `ObjectProvider` 组装装饰链 `Recording ⊃ Caching ⊃ ThresholdRouter ⊃ backend`，`decisionPort` 标 `@Primary` 消除双 `DecisionPort` Bean 歧义；infra `ThresholdRouter`（decide 透传保留 confidence + `route()` 供 J4–J10 分流：高置信 CHOICE→RUN/SKIP/BRANCH/APPROVE/TERMINATE，低置信/缺失→FAIL_CLOSED，P12③；每次分流发 `decision_route_counts` 事件计数，补齐 J2 留口）、`CachingDecisionPort`（键=`langur:decision:`+sha256(state,model,问题签名)，复用 H4 `CacheBackend`，仅缓存 answers JSON——命中零成本空 usage，缓存/序列化异常静默直连下层，P10）、`LocalDecisionAdapter`（继承 TypeSafe 适配器换 base-url 免鉴权，Kev 兼容 v3.0 §2.2）、`DataResidencyDecisionPort`（命中 `sensitive-namespaces` 的 state 强制 local；无 local 端点 fail-closed 规则兜底，绝不发往第三方，DD10/P12⑤；缺省空列表不启用）、`DecisionProperties`（`langur.decision.*` P9，DD11 阈值 0.75/0.90/0.80/0.85 经 `toDomain()` 注入）；`api-key-ref` 经 H7 `SecretResolver` 解析、失败降级空串（后端拒绝→规则兜底即 fail-closed，绝不明文，P12⑥）；application.yml 补全量注释样例。新增 19 测（infra 13：Caching 6/Threshold 6/DataResidency 5 中合并计 + start 6），`mvn clean test` 全绿（infra 288→305、start 27→33）。装配变更已冒烟：默认关 UP、`enabled=true backend=off` UP，无 Bean 歧义/异常 |
+| 2026-09-26 | J4–J6 | **Workflow 三插入点（①②③）全部落地**。domain 新增 `GateRoute`（与 infra `ThresholdRouter.RouteAction` 语义对齐但落 domain，遵 P2 单向依赖：`of(DecisionAnswer,threshold)` 低置信/非 CHOICE→FAIL_CLOSED/RUN_NEXT，choice 小写映射 skip/branch/abort/approve）、`StageDecisionGate`（record，防御式紧凑构造器：空 key 抛错、type 缺省 CHOICE、threshold≤0→DEFAULT_ROUTING 0.75，`toQuestion()`）；`WorkflowStage` 加 `@Builder(toBuilder)` + `critical`/`decisionGate` 字段与 `withCritical`/`withDecisionGate`；`Artifact` 加 `accepted`/`reviewNote`（`of`→accepted=true 保持 v2.0、`reviewed` 供 J6 打标）。`WorkflowExecutionLoop` 重构为带索引 while 循环：J4 阶段产出后 `evaluateStageGate`（state=阶段指令+截断产出）经 `attachDecisionPlane` 注入的 `DecisionPort` 判定，SKIP=`completed.add(next)`+即时快照（续跑确定性）、BRANCH 带 `branchBudget=stages.size()` 防环、ABORT 终止、REQUIRE_APPROVAL 建 `workflow-gate:<stageId>` 审批单挂起且续跑前 `findBlockingGateApproval` 阻断 DENIED/PENDING（只收紧）；J5 `checkApproval` 仅对**非 CRITICAL** 且无既有单时 `score("approval-auto")` 三分流——`value∧confidence≥0.90` 自动放行（建 APPROVED 单、decisionBy=`decision-plane` 留痕）否则转人审，**CRITICAL 恒人审、决策平面零调用**（桩断言 requests.size()==0，P12②）；J6 `reviewArtifact` 对产物 `score("artifact-accept")`，`value∧confidence≥0.80` 接受否则 1 次有界重试（受 `MAX_ARTIFACT_RETRIES`+`gateTripped` 约束），仍低分则 `accepted=false`+reviewNote 打标**不阻断**。所有分流发 `decision_route_counts`（GateRoute 名小写）；`decideQuietly` 吞异常降级（P10），端口缺失=完全 v2.0 行为。infra `WorkflowProperties`+`critical`/`decisionGate`（DecisionGateProps）、`WorkflowDefinitionRegistrar.toGate`（key/instructions 空→闸门失效，threshold null→0→DEFAULT_ROUTING）；start `HarnessConfiguration` 对 workflow+hybrid 两 Bean `attachDecisionPlane(ObjectProvider<DecisionPort> 尊重 @Primary, ObjectProvider<DecisionProperties>)`；application.yml 补 workflow 决策闸门/critical/J6 注释样例。新增 14 测（domain `WorkflowExecutionLoopDecisionGateTest` 12 + infra registrar +2），`mvn clean test` 全绿（domain 128→140、infra 305→307、start 33）。装配变更已双冒烟：默认关 UP、`enabled=true backend=off` UP（决策平面装配日志确认），无 Bean 歧义/异常 |
