@@ -139,6 +139,30 @@ langur:
   # H3 中层 PlanAndExecute 规划器：heuristic（默认，领域启发式拆解，零外部依赖）| llm（走 M5 REASONING 角色规划，失败降级启发式）
   planner:
     type: heuristic
+  # J3 决策平面（v3.0，默认关闭 P12①）：System-1 判定端口（TypeSafe Jev 首后端），装饰链
+  # Recording ⊃ Caching ⊃ ThresholdRouter ⊃ backend。关闭时不产任何 Bean，行为与 v2.0 完全一致；
+  # 判定失败/低置信/超时一律 fail-closed 回退规则兜底（P12③），安全闸门恒 advisory 只收紧不放松（P12②）。
+  # decision:
+  #   enabled: false                                        # 总开关（缺省 false）
+  #   backend: typesafe                                     # typesafe（Jev 云）| local（自部署 Kev/Jev）| off（仅规则兜底）
+  #   model: jev-latest
+  #   base-url: https://api.typesafe.ai/v1/systemone
+  #   api-key-ref: env:JEV_API_KEY                          # H7 SecretResolver（env:/prop:/kms:），绝不明文/落日志（P12⑥）
+  #   timeout-millis: 800                                   # 判定须远快于生成；超时 fail-closed
+  #   batch: true                                           # 批量投机扇出（state 只发一次）
+  #   record: true                                          # 决策轨迹录制（R0 前向兼容，P12④，不可关）
+  #   cache:
+  #     enabled: true                                       # H4 CacheBackend 按 state 哈希缓存判定（TTL 内零成本）
+  #     ttl-seconds: 300
+  #   thresholds:                                           # DD11 各插入点置信阈值（低于阈值 fail-closed）
+  #     routing: 0.75                                       # 路由/分流
+  #     approval-auto: 0.90                                 # 审批自动放行（CRITICAL 恒人审，J5）
+  #     artifact-accept: 0.80                               # 产物验收（J6）
+  #     completion: 0.85                                    # 完成度判定（J7/J9）
+  #   data-residency:                                       # DD10/P12⑤：命中敏感命名空间的 state 强制走 local，绝不出网
+  #     sensitive-namespaces: []                            # 缺省空（不启用）；示例：[legal-contracts, code]
+  #     local-base-url: ""                                  # 自部署判定端点；敏感命中且缺 local → fail-closed 规则兜底
+  #     local-model: ""                                     # 留空复用 decision.model
   # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
   # 叠加“分步/规划/多步”等特征则升为 HYBRID（Workflow→PlanAndExecute→ReAct 三层）。

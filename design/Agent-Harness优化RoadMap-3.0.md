@@ -4,7 +4,7 @@
 > **基线**：RoadMap 2.0 全部 H1–H10 已完成并提交（2026-09-25），六组件 As-Built ~85%，320 测试全绿；v2.0 六组件拓扑继续有效，本轮**只增量**新增"决策平面"能力面并承接 RSI（R\*）
 > **性质**：执行级路线图（可逐项派发）。本轮使用 **`J*`（决策平面 / Jev 接入）** 编号 + **承接 `R*`（RSI 演进，来自 RoadMap 2.0）** + **保留 `H11/H12`（治理/扩展，待派发）**
 > **使用方式**：逐项派发（如"完成 J1"），完成后将 `[ ]` 改为 `[x]` 并在 §11"完成记录"补日期与说明；每完成一项同步更新 v3.0 架构文档 §3/§4 落点标注与 §9 成熟度
-> **状态**：本轮全部任务 **待派发**（规划态）。决策平面 Phase 0（N1–N2）为纯 H 类能力接入，不触发 P11；RSI（N3–N5）**沿用当前暂停状态**，解锁前不派发
+> **状态**：**N1（J1–J3）已完成（2026-09-26），达成熟度 D1（Jev advisory）**；N2（J4–J10）待派发。决策平面 Phase 0（N1–N2）为纯 H 类能力接入，不触发 P11；RSI（N3–N5）**沿用当前暂停状态**，解锁前不派发
 
 ---
 
@@ -109,7 +109,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 - **依赖**：J1 | **优先级**：P0 | **估算**：M
 
 ### J3. `DecisionConfiguration` 装配 + 阈值路由 + 缓存 + 自部署后端 + 数据驻留
-- [ ] 待派发
+- [x] 已完成（2026-09-26）
 - **现状/问题**：需把"录制→缓存→阈值→后端→兜底"组装为装饰链并默认关闭；安全/审批判定须 fail-closed；敏感数据须驻留本地。
 - **改动要点**：
   - **start**：`DecisionConfiguration`——经 `ObjectProvider<DecisionPort>` 松耦合组装装饰链（v3.0 §5.2），注入到 E/T/C/L 各消费点；`langur.decision.enabled=false` 时不装配、行为与 v2.0 一致（P10）。
@@ -330,3 +330,4 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 | 2026-09-25 | — | RoadMap 3.0 创建：依据 v3.0 架构文档规划 J1–J10（决策平面）+ 承接 R0–R5/R-G（RSI，待派发）+ 保留 H11/H12；全部任务待派发，Phase 0（N1–N2）可独立排期，N3–N5 以 RSI 解锁为前置门 |
 | 2026-09-25 | J1 | `DecisionPort` 契约落 domain（`port/DecisionPort` + `harness/decision/{DecisionRequest,DecisionQuestion,DecisionType(choice/noul/score),DecisionResponse,DecisionAnswer,DecisionThresholds}`，纯 JDK 零外部依赖，P1 已断言无 Spring/Jackson import）；usage 复用 H1 `LLMPort.TokenUsage`；infra `TypeSafeDecisionAdapter`（WebClient POST `{state,model,questions{noul\|choice\|score,instructions,criteria}}`，批量投机扇出 state 只发一次，解析 choice/value+confidence+distribution+usage，异常/超时/无问题委派兜底不抛出）+ `RuleFallbackDecisionAdapter`（复用 H10 `OutputContentReviewer`，confidence 恒 0 → J3 ThresholdRouter fail-closed）；DD13 domain 新端口、infra 适配既有 `DecisionEngineSPI`（J3 装配）；适配器不带 `@Component`，J3 条件装配。新增 17 测（domain 7 + infra 10，HttpServer 离线桩），`mvn clean test` 全绿（infra 271→281）。未改装配，无需冒烟 |
 | 2026-09-26 | J2 | `RecordingDecisionPort` 装饰器（包裹后端，判定原样透传）：`record=true` 时把 request/response/latencyMillis 封为 S 组件 `StateSnapshot` 交 `DecisionTrajectoryRecorder` 落轨迹（R0 前向兼容 C2/DD12；缺省实现 `LoggingDecisionTrajectoryRecorder`，J3 装配）；决策维度指标经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 MeterRegistry（新增 `MetricDimension.DECISION`，v3.0 §6.1）：`decision_latency`/`decision_confidence`(均值)/`decision_fallback_rate`(依 RuleFallback confidence 恒 0 契约推断降级)/`decision_cost`(输入 token，复用 H1)；`decision_route_counts` 留 J3；判定（含 confidence/distribution）经 `Checksums.sha256` 写审计链。录制/指标/审计失败静默降级（P10）。新增 7 测（SimpleMeterRegistry + 捕获桩），`mvn clean test` 全绿（domain 121→128、infra 281→288）。未改装配，无需冒烟 |
+| 2026-09-26 | J3 | **N1 完成，达成熟度 D1（Jev advisory）**。start `DecisionConfiguration`（`@ConditionalOnProperty langur.decision.enabled=true`，默认关闭不产 Bean、行为与 v2.0 一致，P12①）经 `ObjectProvider` 组装装饰链 `Recording ⊃ Caching ⊃ ThresholdRouter ⊃ backend`，`decisionPort` 标 `@Primary` 消除双 `DecisionPort` Bean 歧义；infra `ThresholdRouter`（decide 透传保留 confidence + `route()` 供 J4–J10 分流：高置信 CHOICE→RUN/SKIP/BRANCH/APPROVE/TERMINATE，低置信/缺失→FAIL_CLOSED，P12③；每次分流发 `decision_route_counts` 事件计数，补齐 J2 留口）、`CachingDecisionPort`（键=`langur:decision:`+sha256(state,model,问题签名)，复用 H4 `CacheBackend`，仅缓存 answers JSON——命中零成本空 usage，缓存/序列化异常静默直连下层，P10）、`LocalDecisionAdapter`（继承 TypeSafe 适配器换 base-url 免鉴权，Kev 兼容 v3.0 §2.2）、`DataResidencyDecisionPort`（命中 `sensitive-namespaces` 的 state 强制 local；无 local 端点 fail-closed 规则兜底，绝不发往第三方，DD10/P12⑤；缺省空列表不启用）、`DecisionProperties`（`langur.decision.*` P9，DD11 阈值 0.75/0.90/0.80/0.85 经 `toDomain()` 注入）；`api-key-ref` 经 H7 `SecretResolver` 解析、失败降级空串（后端拒绝→规则兜底即 fail-closed，绝不明文，P12⑥）；application.yml 补全量注释样例。新增 19 测（infra 13：Caching 6/Threshold 6/DataResidency 5 中合并计 + start 6），`mvn clean test` 全绿（infra 288→305、start 27→33）。装配变更已冒烟：默认关 UP、`enabled=true backend=off` UP，无 Bean 歧义/异常 |

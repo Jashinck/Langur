@@ -47,6 +47,11 @@ public class RecordingDecisionPort implements DecisionPort {
         this.record = record;
     }
 
+    /** 被包裹的下层端口（供 J3 装饰链装配顺序校验）。 */
+    public DecisionPort getDelegate() {
+        return delegate;
+    }
+
     @Override
     public DecisionResponse decide(DecisionRequest request) {
         long startNanos = System.nanoTime();

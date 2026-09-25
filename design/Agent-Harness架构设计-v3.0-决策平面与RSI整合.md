@@ -150,8 +150,10 @@ DecisionAnswer    { DecisionType type;
 | 装饰器 | 职责 | 对应原则/RSI |
 |--------|------|--------------|
 | `RecordingDecisionPort` ✅（J2，2026-09-26） | 把每次 `decide` 的 request/response **录制进轨迹快照**（与 LLM 录制同通道，复用 S 组件 `StateSnapshot` + `DecisionTrajectoryRecorder`）；并经 H5 上报决策维度指标 + 审计 checksum | **R0 回放确定性（DD5 扩展）**——否则反事实重放失真 |
-| `ThresholdRouter` | `confidence ≥ 阈值` → 程序化分流；`< 阈值` → fail-closed（升级/人审/回退规则） | P10 降级 + P12 advisory |
-| `CachingDecisionPort` | 按 `state` 哈希 + 问题签名缓存判定（复用 H4 `CacheBackend`） | 效率（多闸门不重复调用） |
+| `ThresholdRouter` ✅（J3，2026-09-26） | `confidence ≥ 阈值` → 程序化分流；`< 阈值` → fail-closed（升级/人审/回退规则）；每次分流发 `decision_route_counts` | P10 降级 + P12 advisory |
+| `CachingDecisionPort` ✅（J3，2026-09-26） | 按 `state` 哈希 + 问题签名缓存判定（复用 H4 `CacheBackend`，键 `langur:decision:<sha256>`） | 效率（多闸门不重复调用） |
+
+> **J3 增补落地**：装饰器链另含 `DataResidencyDecisionPort`（后端选择器，DD10/P12⑤）——命中 `sensitive-namespaces` 的 `state` 强制走 `LocalDecisionAdapter`；无 local 端点则 fail-closed 规则兜底，绝不发往第三方托管。
 
 ---
 
@@ -262,8 +264,8 @@ Phase 2（M4/M5）：
 | 模块 | 新增 | 依赖约束 |
 |------|------|----------|
 | **langur-domain** | `port/DecisionPort`；`harness/decision/{DecisionRequest, DecisionQuestion, DecisionType, DecisionResponse, DecisionAnswer, DecisionThresholds}`（纯值对象） | 仅 common+lombok（P1）✅ |
-| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter}`；`DecisionProperties` | 实现 domain 端口（P3） |
-| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关 | 装配 |
+| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter, DataResidencyDecisionPort}`；`DecisionProperties` | 实现 domain 端口（P3）✅ 已落地（J1/J2/J3，2026-09-26） |
+| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关 | 装配 ✅ 已落地（J3，2026-09-26） |
 | **langur-common** | （可选）`spi/DecisionEngineSPI` 若尚未独立成形，在此定型契约 | 零 Spring |
 
 ### 5.2 装配（装饰链，默认关闭 P10）
@@ -277,6 +279,8 @@ DecisionPort（注入到 E/T/C/L 各处，均 ObjectProvider 可选）
         | LocalDecisionAdapter       // =local（自部署 Kev/Laya，敏感数据）
         | RuleFallbackDecisionAdapter// =off/不可用 → 回退现有规则/正则（P10）
 ```
+
+> **✅ 已落地（J3，2026-09-26）**：`DecisionConfiguration`（start，`@ConditionalOnProperty langur.decision.enabled=true`，默认关不产 Bean、行为与 v2.0 一致）按上图组装；`decisionPort` 标 `@Primary`（`ThresholdRouter` 亦暴露为 Bean 供 J4–J10 注入 `route()`），消除双 `DecisionPort` Bean 歧义。backend=typesafe 且配置了 `sensitive-namespaces` 时，最内层再包 `DataResidencyDecisionPort`（DD10）。装配顺序经 `getDelegate()` 遍历单测断言。
 
 ### 5.3 配置（`langur.decision.*`，P9）
 
@@ -303,6 +307,8 @@ langur:
       sensitive-namespaces: [legal-contracts, code]   # 命中→强制 local 后端
 ```
 
+> **✅ 已落地（J3，2026-09-26）**：`DecisionProperties` 绑定 `langur.decision.*`（含 `cache`/`thresholds`/`data-residency` 嵌套），`application.yml` 已补全量注释样例。两处实现约定：① `sensitive-namespaces` **缺省为空**（不启用驻留路由，避免 `code` 等子串误伤），运维按上图显式配置开启；敏感命中但缺 `local-base-url` 时 fail-closed 规则兜底，绝不发往第三方。② `api-key-ref` 解析失败降级空串（后端拒绝 → 规则兜底，即 fail-closed），绝不明文/落日志（P12⑥）。
+
 ---
 
 ## 6. 可观测与确定性
@@ -317,7 +323,7 @@ langur:
 | `decision_route_counts` | 按阈值分流计数（run/skip/branch/approve/abort） | 行为审计 |
 | `decision_cost` | 输入 token 计量（复用 H1 `TokenUsage`） | 成本核算 |
 
-> **落地状态（J2，2026-09-26）**：`decision_latency`/`decision_confidence`/`decision_fallback_rate`/`decision_cost` 已由 `RecordingDecisionPort` 经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 `MeterRegistry`（新增 `MetricDimension.DECISION`，指标名 `langur.harness.decision_*`，`/actuator/prometheus` 可暴露）；`decision_fallback_rate` 依 `RuleFallbackDecisionAdapter` 的 confidence 恒 0 契约推断降级。`decision_route_counts` 由 J3 `ThresholdRouter` 补齐。
+> **落地状态（J2，2026-09-26）**：`decision_latency`/`decision_confidence`/`decision_fallback_rate`/`decision_cost` 已由 `RecordingDecisionPort` 经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 `MeterRegistry`（新增 `MetricDimension.DECISION`，指标名 `langur.harness.decision_*`，`/actuator/prometheus` 可暴露）；`decision_fallback_rate` 依 `RuleFallbackDecisionAdapter` 的 confidence 恒 0 契约推断降级。`decision_route_counts` 已由 J3 `ThresholdRouter.route()` 补齐（2026-09-26，事件计数按 action 打 tag：run/skip/branch/approve/terminate/fail_closed）——**五维决策指标全部可查**。
 
 ### 6.2 确定性（R0 前提，C2）
 
@@ -357,7 +363,7 @@ langur:
 | **D0** | 规则判定（现状） | 正则/字符串/固定规则 + 昂贵 M5 判定 | — | 低（但脆弱/贵） |
 | **D1** | Jev advisory | `DecisionPort` 接入，仅非安全闸门做**建议** + 规则兜底，默认关、可录制 | J1–J3 | 低 |
 
-> **D1 进度（2026-09-26）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2 ✅（`RecordingDecisionPort` 录制 + 决策维度指标 + 审计 checksum，7 测全绿）；J3（装配 + 阈值路由 + 缓存 + local 后端 + 数据驻留）待落地，完成后达 D1。
+> **D1 进度（2026-09-26）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2 ✅（`RecordingDecisionPort` 录制 + 决策维度指标 + 审计 checksum，7 测全绿）；J3 ✅（`DecisionConfiguration` 装配 + `ThresholdRouter`/`CachingDecisionPort`/`LocalDecisionAdapter`/`DataResidencyDecisionPort` + `DecisionProperties`，19 测全绿，默认关/开启双冒烟 UP）。**N1 完成，达成熟度 D1（Jev advisory）**；下一步 N2（J4–J10，执行集成 → D2）。
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
 
