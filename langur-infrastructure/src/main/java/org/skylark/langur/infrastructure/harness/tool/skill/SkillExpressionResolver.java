@@ -85,6 +85,13 @@ public class SkillExpressionResolver {
         if (node instanceof Map<?, ?> map) {
             return map.get(key);
         }
+        if (node instanceof List<?> list) {
+            try {
+                return list.get(Integer.parseInt(key));
+            } catch (RuntimeException e) {
+                return null;
+            }
+        }
         if (node instanceof String s) {
             Object parsed = tryParseJson(s);
             if (parsed instanceof Map<?, ?> map) {

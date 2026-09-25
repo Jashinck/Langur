@@ -22,4 +22,26 @@ public class ObservabilityProperties {
 
     /** 是否将 Span 以日志形式导出（便于在无 Collector 环境观测完整 Span 链）。 */
     private boolean logSpans = true;
+
+    /**
+     * 评估观测后端（H5）：{@code logging}（默认，仅日志）| {@code prometheus}（四维指标 → Micrometer/Prometheus）。
+     */
+    private String evaluation = "logging";
+
+    /** 告警分级配置（H5，§10.3）。 */
+    private Alert alert = new Alert();
+
+    @Data
+    public static class Alert {
+        /** 是否启用告警分级评估。 */
+        private boolean enabled = true;
+        /** P1 延迟上限（毫秒）。 */
+        private long latencyMillis = 5_000L;
+        /** P2 Token 预警阈值。 */
+        private long tokenThreshold = 32_000L;
+        /** P0 安全拦截致命阈值。 */
+        private int interceptionThreshold = 1;
+        /** P1 工具成功率下限（0..1）。 */
+        private double toolSuccessRateFloor = 0.95d;
+    }
 }

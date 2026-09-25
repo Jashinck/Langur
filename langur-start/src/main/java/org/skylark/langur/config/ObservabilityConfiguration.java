@@ -8,11 +8,17 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import org.skylark.langur.domain.harness.evaluation.alert.AlertChannel;
+import org.skylark.langur.domain.harness.evaluation.alert.AlertEvaluator;
+import org.skylark.langur.domain.harness.evaluation.alert.AlertThresholds;
 import org.skylark.langur.domain.harness.evaluation.tracing.ExecutionTracer;
 import org.skylark.langur.infrastructure.harness.evaluation.ObservabilityProperties;
 import org.skylark.langur.infrastructure.harness.evaluation.tracing.OtelExecutionTracer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 /**
  * 可观测装配（T12，§10）。
@@ -40,5 +46,27 @@ public class ObservabilityConfiguration {
     @Bean
     public ExecutionTracer executionTracer(OpenTelemetry openTelemetry) {
         return new OtelExecutionTracer(openTelemetry);
+    }
+
+    /**
+     * 告警分级评估器（H5，§10.3）。阈值由 {@code langur.observability.alert.*} 配置化驱动（P9）；
+     * {@code alert.enabled=false} 时装配空规则集（评估恒不命中，零副作用）。
+     * 通道取容器内 {@link AlertChannel}（默认 {@code LoggingAlertChannel}），缺失则 NOOP 兜底（P10）。
+     */
+    @Bean
+    public AlertEvaluator alertEvaluator(ObservabilityProperties properties,
+                                         ObjectProvider<AlertChannel> channelProvider) {
+        AlertChannel channel = channelProvider.getIfAvailable(() -> AlertChannel.NOOP);
+        ObservabilityProperties.Alert alert = properties.getAlert();
+        if (alert == null || !alert.isEnabled()) {
+            return new AlertEvaluator(List.of(), channel);
+        }
+        AlertThresholds thresholds = AlertThresholds.builder()
+                .latencyMillis(alert.getLatencyMillis())
+                .tokenThreshold(alert.getTokenThreshold())
+                .interceptionThreshold(alert.getInterceptionThreshold())
+                .toolSuccessRateFloor(alert.getToolSuccessRateFloor())
+                .build();
+        return AlertEvaluator.withDefaults(thresholds, channel);
     }
 }

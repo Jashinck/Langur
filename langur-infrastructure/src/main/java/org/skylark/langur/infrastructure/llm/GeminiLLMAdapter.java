@@ -104,7 +104,9 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
 
     @SuppressWarnings("unchecked")
     private LLMDecision parseDecision(String responseJson) throws Exception {
-        JsonNode parts = firstParts(responseJson);
+        JsonNode root = objectMapper.readTree(responseJson);
+        JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
+        LLMPort.TokenUsage usage = parseUsage(root);
         List<String> texts = new ArrayList<>();
         for (JsonNode part : parts) {
             if (part.has("functionCall")) {
@@ -112,13 +114,31 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
                 return LLMDecision.toolCall(
                         String.join("\n", texts),
                         functionCall.path("name").asText(),
-                        objectMapper.convertValue(functionCall.path("args"), Map.class));
+                        objectMapper.convertValue(functionCall.path("args"), Map.class),
+                        usage);
             }
             if (part.has("text")) {
                 texts.add(part.path("text").asText());
             }
         }
-        return LLMDecision.finalAnswer(String.join("\n", texts));
+        return LLMDecision.finalAnswer(String.join("\n", texts), usage);
+    }
+
+    /**
+     * 解析 Gemini usageMetadata（H1）：优先 candidates[0].usageMetadata，回退顶层；缺失返回 null。
+     */
+    private LLMPort.TokenUsage parseUsage(JsonNode root) {
+        JsonNode meta = root.path("candidates").path(0).path("usageMetadata");
+        if (meta.isMissingNode() || meta.isNull()) {
+            meta = root.path("usageMetadata");
+        }
+        if (meta.isMissingNode() || meta.isNull()) {
+            return null;
+        }
+        long prompt = meta.path("promptTokenCount").asLong(0);
+        long completion = meta.path("candidatesTokenCount").asLong(0);
+        long total = meta.path("totalTokenCount").asLong(prompt + completion);
+        return total <= 0 ? null : LLMPort.TokenUsage.of(prompt, completion, total);
     }
 
     private String extractText(String responseJson) throws Exception {

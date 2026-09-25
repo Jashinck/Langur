@@ -5,6 +5,7 @@ import org.skylark.langur.domain.event.AgentCreatedEvent;
 import org.skylark.langur.domain.event.AgentExecutedEvent;
 import org.skylark.langur.domain.event.DomainEvent;
 import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.port.LLMPort;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,6 +28,8 @@ public class Agent {
     private final List<DomainEvent> domainEvents;
     private int iterationCount;
     private String lastError;
+    /** 本轮 LLM 决策回传的真实 Token 计量（H1）；由执行循环消费后清空。 */
+    private LLMPort.TokenUsage lastRoundUsage;
     private final Instant createdAt;
     private Instant updatedAt;
 
@@ -135,6 +138,25 @@ public class Agent {
 
     public void incrementIteration() {
         this.iterationCount++;
+    }
+
+    /**
+     * 记录本轮 LLM 决策回传的真实 Token 计量（H1）。null / 空计量忽略，交由调用方降级估算。
+     */
+    public void recordTokenUsage(LLMPort.TokenUsage usage) {
+        if (usage != null && !usage.isEmpty()) {
+            this.lastRoundUsage = usage;
+            this.updatedAt = Instant.now();
+        }
+    }
+
+    /**
+     * 取出并清空本轮真实 Token 计量（H1）；返回 {@code null} 表示无真实计量，调用方降级为字符估算。
+     */
+    public LLMPort.TokenUsage consumeLastRoundUsage() {
+        LLMPort.TokenUsage usage = this.lastRoundUsage;
+        this.lastRoundUsage = null;
+        return usage;
     }
 
     public boolean hasExceededMaxIterations() {

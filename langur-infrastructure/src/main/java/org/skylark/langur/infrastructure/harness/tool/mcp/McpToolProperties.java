@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,14 +27,28 @@ public class McpToolProperties {
     /** MCP 协议版本（initialize 握手声明）。 */
     private String protocolVersion = "2024-11-05";
 
+    /** 单服务端连续失败达此阈值即熔断跳闸（H6 多 server 隔离）。 */
+    private int failureThreshold = 3;
+
+    /** 熔断冷却秒数：冷却期内快速失败，冷却后放行试探（半开）。 */
+    private long circuitCooldownSeconds = 30;
+
     private List<ServerProps> servers = new ArrayList<>();
 
     @Data
     public static class ServerProps {
         /** 服务端逻辑名，参与工具 ID：mcp:{name}:{tool}。 */
         private String name;
-        /** JSON-RPC over HTTP(S) 端点。 */
+        /** 传输类型（H6）：HTTP（默认）/ STDIO / SSE / WS。 */
+        private McpTransportType transport = McpTransportType.HTTP;
+        /** JSON-RPC over HTTP(S) 端点；SSE 时作为出站 POST 端点。 */
         private String url;
+        /** SSE 入站事件流端点；为空时回退 {@link #url}。 */
+        private String sseUrl;
+        /** STDIO 传输：本地子进程命令（含参数），如 {@code ["npx","-y","@mcp/fs"]}。 */
+        private List<String> command = new ArrayList<>();
+        /** STDIO 传输：子进程附加环境变量。 */
+        private Map<String, String> env = new HashMap<>();
         /** 静态请求头（凭证头由 CredentialVault 追加）。 */
         private Map<String, String> headers;
         /** 凭证引用，复用 REST 工具源凭证库；为空表示匿名。 */

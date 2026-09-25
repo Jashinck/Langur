@@ -1,15 +1,17 @@
 package org.skylark.langur.api.governance;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 限流器（§13.3）- 固定窗口计数，按 key 每分钟许可数限流。内存实现，分布式版可后置替换。
+ * 限流器（§13.3）- 固定窗口计数，按 key 每分钟许可数限流。内存实现（单机默认，{@code langur.cache.type=memory}）。
  */
 @Component
-public class InMemoryRateLimiter {
+@ConditionalOnProperty(name = "langur.cache.type", havingValue = "memory", matchIfMissing = true)
+public class InMemoryRateLimiter implements RateLimiter {
 
     private final ConcurrentHashMap<String, AtomicReference<Window>> windows = new ConcurrentHashMap<>();
 
@@ -20,6 +22,7 @@ public class InMemoryRateLimiter {
      * @param permitsPerMinute 每分钟许可数；&lt;=0 表示不限流
      * @return true 放行；false 触发限流
      */
+    @Override
     public boolean tryAcquire(String key, int permitsPerMinute) {
         if (permitsPerMinute <= 0 || key == null) {
             return true;

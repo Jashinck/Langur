@@ -31,4 +31,11 @@ class DefaultLayerRouterTest {
         assertEquals(RuntimeLayer.PLAN_LAYER, router.route("default", "帮我规划一次多步骤的旅行"));
         assertEquals(RuntimeParadigm.PLAN_AND_EXECUTE, router.paradigmOf(router.route("default", "step by step")));
     }
+
+    @Test
+    void shouldRouteHybridForComplianceMultiStepTask() {
+        // 强合规 + 多步骤 → 分层混合（顶层锁边界 → 中层拆解 → 底层执行）
+        assertEquals(RuntimeLayer.HYBRID_LAYER, router.route("compliance-flow", "请分步 plan 执行"));
+        assertEquals(RuntimeParadigm.HYBRID, router.paradigmOf(router.route("approval", "step by step 规划")));
+    }
 }

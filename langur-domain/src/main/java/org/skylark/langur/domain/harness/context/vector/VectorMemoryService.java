@@ -18,10 +18,17 @@ public class VectorMemoryService {
 
     private final EmbeddingPort embeddingPort;
     private final VectorStore vectorStore;
+    /** M3 重排端口（H2，可选）；为 null 时召回结果不重排。 */
+    private final RerankPort rerankPort;
 
     public VectorMemoryService(EmbeddingPort embeddingPort, VectorStore vectorStore) {
+        this(embeddingPort, vectorStore, null);
+    }
+
+    public VectorMemoryService(EmbeddingPort embeddingPort, VectorStore vectorStore, RerankPort rerankPort) {
         this.embeddingPort = embeddingPort;
         this.vectorStore = vectorStore;
+        this.rerankPort = rerankPort;
     }
 
     /**
@@ -53,6 +60,10 @@ public class VectorMemoryService {
         }
         float[] queryVector = embeddingPort.embed(query);
         List<VectorRecord> matches = vectorStore.search(namespace, queryVector, topK);
+        // [M3] 重排去噪（H2）：装配 RerankPort 时对 cosine 召回结果重新排序
+        if (rerankPort != null && !matches.isEmpty()) {
+            matches = rerankPort.rerank(query, matches, topK);
+        }
         List<VectorRecord> budgeted = new ArrayList<>();
         long consumed = 0L;
         for (VectorRecord record : matches) {

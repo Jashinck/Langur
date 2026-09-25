@@ -88,6 +88,9 @@ public class AgentDomainService {
             return fallback;
         }
 
+        // [V] H1：回填本轮真实 Token 计量，供执行循环计量与闸门消费（缺失时循环降级估算）
+        agent.recordTokenUsage(decision.getUsage());
+
         if (decision.isFinalAnswer()) {
             agent.markCompleted(decision.getFinalAnswer());
             return decision.getFinalAnswer();

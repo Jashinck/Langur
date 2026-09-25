@@ -32,8 +32,8 @@ public class GovernanceFilter extends OncePerRequestFilter {
     private static final String MDC_TRACE_ID = "traceId";
 
     private final GovernanceProperties properties;
-    private final InMemoryRateLimiter rateLimiter;
-    private final InMemoryIdempotencyStore idempotencyStore;
+    private final RateLimiter rateLimiter;
+    private final IdempotencyStore idempotencyStore;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -122,13 +122,13 @@ public class GovernanceFilter extends OncePerRequestFilter {
         } finally {
             byte[] body = wrapper.getContentAsByteArray();
             idempotencyStore.complete(key,
-                    new InMemoryIdempotencyStore.StoredResponse(wrapper.getStatus(), wrapper.getContentType(), body));
+                    new IdempotencyStore.StoredResponse(wrapper.getStatus(), wrapper.getContentType(), body));
             wrapper.copyBodyToResponse();
         }
         return true;
     }
 
-    private void replay(HttpServletResponse response, InMemoryIdempotencyStore.StoredResponse stored)
+    private void replay(HttpServletResponse response, IdempotencyStore.StoredResponse stored)
             throws IOException {
         response.setStatus(stored.status());
         if (stored.contentType() != null) {

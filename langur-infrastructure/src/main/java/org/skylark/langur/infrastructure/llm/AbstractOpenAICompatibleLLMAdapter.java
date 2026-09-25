@@ -149,6 +149,7 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
     protected LLMDecision parseDecision(String responseJson) throws Exception {
         JsonNode root = objectMapper.readTree(responseJson);
         JsonNode message = root.at("/choices/0/message");
+        LLMPort.TokenUsage usage = parseUsage(root);
 
         JsonNode toolCalls = message.get("tool_calls");
         if (toolCalls != null && toolCalls.isArray() && !toolCalls.isEmpty()) {
@@ -160,10 +161,27 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
                     : objectMapper.readValue(argsJson, Map.class);
             String thought = message.has("content") && !message.get("content").isNull()
                     ? message.get("content").asText() : "Calling tool: " + toolName;
-            return LLMDecision.toolCall(thought, toolName, args);
+            return LLMDecision.toolCall(thought, toolName, args, usage);
         }
 
-        return LLMDecision.finalAnswer(message.at("/content").asText());
+        return LLMDecision.finalAnswer(message.at("/content").asText(), usage);
+    }
+
+    /**
+     * 解析 OpenAI 兼容响应的 usage 字段（H1）；缺失或全零返回 null，由上层降级为字符估算。
+     */
+    protected LLMPort.TokenUsage parseUsage(JsonNode root) {
+        JsonNode usage = root.get("usage");
+        if (usage == null || usage.isNull()) {
+            return null;
+        }
+        long prompt = usage.path("prompt_tokens").asLong(0);
+        long completion = usage.path("completion_tokens").asLong(0);
+        long total = usage.path("total_tokens").asLong(prompt + completion);
+        if (total <= 0) {
+            return null;
+        }
+        return LLMPort.TokenUsage.of(prompt, completion, total);
     }
 
     protected String resolveModel(String model) {

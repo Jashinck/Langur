@@ -3,6 +3,9 @@ package org.skylark.langur.domain.harness.execution;
 import lombok.Getter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,6 +29,9 @@ public class ExecutionTask {
     private long consumedTokens;
     private int callsInCurrentRound;
     private String terminateReason;
+
+    /** 具名产物集合（多产物输出，如合同审查报告 + 特批项报告）；随任务生命周期累积。 */
+    private final List<Artifact> artifacts = new ArrayList<>();
 
     private ExecutionTask(String taskId, String agentId, String bizCode, String traceId,
                           RuntimeParadigm paradigm, TerminationGate gate,
@@ -99,6 +105,20 @@ public class ExecutionTask {
     public void complete() {
         this.status = ExecutionStatus.COMPLETED;
         this.updatedAt = Instant.now();
+    }
+
+    /** 追加一份具名产物（多产物输出）；同名产物允许并存，由消费方按 name/type 取用。 */
+    public void addArtifact(String name, String type, String content) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        this.artifacts.add(Artifact.of(name, type, content));
+        this.updatedAt = Instant.now();
+    }
+
+    /** 只读产物视图。 */
+    public List<Artifact> getArtifacts() {
+        return Collections.unmodifiableList(artifacts);
     }
 
     public void fail(String reason) {

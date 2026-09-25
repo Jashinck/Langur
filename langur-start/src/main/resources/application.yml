@@ -5,9 +5,31 @@ spring:
   application:
     name: langur
 
+# H5 可观测导出：暴露 Prometheus 抓取端点（evaluation=prometheus 时四维指标经此暴露）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  health:
+    # H4：默认 memory 模式无 Redis 服务，关闭 redis 健康指示器避免 /actuator/health 误报 DOWN；
+    # 切换 cache.type=redis 且已部署 Redis 时可置 true 纳入探活
+    redis:
+      enabled: false
+
 langur:
   repository:
     type: memory
+  # H4 缓存/分布式锁后端：memory（默认，单机/测试）| redis（多实例共享 L2 热层 + 限流计数 + 幂等键持久化 + SETNX 分布式锁）
+  # type=redis 时须配置 spring.data.redis.*；Redis 不可用则各操作静默降级内存，不中断主链路（P10）
+  cache:
+    type: memory
+    ttl-seconds: 1800          # L2 会话热状态 / 幂等键默认 TTL
+    lock-ttl-seconds: 30       # 分布式锁租约时长（到期自动释放防死锁）
+    key-prefix: "langur:"      # Redis 键命名空间前缀
   llm:
     default-provider: openai
     providers:
@@ -52,13 +74,92 @@ langur:
     fallback-chains:
       gpt-4o: [deepseek-chat, qwen-max]
       gemini-1.5-pro: [gpt-4o]
+  # C 组件 L4 向量存储：memory（默认，可测试）| pgvector（生产，需独立 vectorJdbcTemplate 数据源）
+  vector:
+    store: memory
+  # H2 / M2 语义嵌入：lexical（默认，本地词袋，无外部依赖）| llm（走 provider /embeddings 真实语义向量）
+  # type=llm 时 dimensions 须与向量库建表维度一致（DD7 配置化）；provider 调用失败自动降级本地哈希嵌入（P10）
+  embedding:
+    type: lexical
+    dimensions: 1536
+    batch-size: 16
+    # model: text-embedding-3-small   # 留空则用 langur.llm.role-models.EMBEDDING
+    # base-url:                        # 留空则用默认 provider
+    # api-key: ${OPENAI_API_KEY:}      # 留空则用默认 provider
+    timeout-seconds: 15
+  # H2 / M3 召回重排：默认关闭；开启后按 alpha 混合语义 cosine 与词面覆盖对召回结果重排去噪
+  rerank:
+    enabled: false
+    alpha: 0.7
+    top-k: 0
+  # H2 知识库接通：VectorMemoryService 装配后，KnowledgeToolProvider 自动注册两个本地工具（经四层校验链）：
+  #   knowledge_retrieve(query, namespace, topK) —— 语义召回领域知识（如法律合同知识库）
+  #   knowledge_ingest(content, namespace, id)   —— 运行期向知识库补充语料（向量化 UPSERT）
+  # 无需额外开关；向量服务不可用时自动降级为空（P10）。工作流阶段可直接指令调用这两个工具。
   run-task:
     executor-size: 4
+  # H3 中层 PlanAndExecute 规划器：heuristic（默认，领域启发式拆解，零外部依赖）| llm（走 M5 REASONING 角色规划，失败降级启发式）
+  planner:
+    type: heuristic
+  # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
+  # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
+  # 叠加“分步/规划/多步”等特征则升为 HYBRID（Workflow→PlanAndExecute→ReAct 三层）。
+  # 阶段字段：id / instruction / requiresApproval(审批闸门，经 ApprovalPort 挂起-恢复) / artifactName+artifactType(产出具名产物，多产物输出)。
+  workflow:
+    definitions:
+      # 示例：合同审查长任务——读取合同与尽调 → 知识库检索 → 合同审核 Skill → 特批项审批闸门 → 出具两份报告
+      - biz-code: contract_review
+        name: 合同审查
+        stages:
+          - id: ingest
+            instruction: 读取输入的合同报告与尽调意见，抽取关键条款与风险点
+          - id: kb-retrieve
+            instruction: 调用 knowledge_retrieve 检索法律合同领域知识库（namespace=legal-contracts），补充适用法规与判例
+          - id: skill-review
+            instruction: 调用合同审核 Skill（skill:contract-review）逐条比对条款合规性，形成审查结论
+          - id: special-approval
+            instruction: 汇总需特批的高风险/偏离条款，提交人工特批
+            requires-approval: true
+            artifact-name: approval-items
+            artifact-type: approval-items
+          - id: report
+            instruction: 综合审查结论与特批结果，出具合同审查报告
+            artifact-name: review-report
+            artifact-type: report
+      # 示例：长任务 Coding Agent——读代码 → 分析 → 转译PRD Skill → 产出 PRD 文档（需先启用 langur.code-access）
+      - biz-code: code_to_prd
+        name: 代码转译PRD
+        stages:
+          - id: scan-code
+            instruction: 用 list_dir/grep/read_file 浏览目标模块，定位与需求相关的源码与接口
+          - id: analyze
+            instruction: 阅读关键文件，梳理现有功能、接口、数据结构与约束，汇总为代码上下文
+          - id: translate
+            instruction: 调用 skill:translate-prd，把代码上下文与目标特性转译为结构化 PRD
+          - id: deliver
+            instruction: 校订并输出最终 PRD 文档
+            artifact-name: prd-document
+            artifact-type: prd
+  # H10 安全补强：输入 Prompt 注入检测（BEFORE_INFERENCE）+ 输出内容审核（BEFORE_OUTPUT），缺省启用
+  security:
+    prompt-injection:
+      enabled: true
+    content-review:
+      enabled: true
   # T12 可观测生产化（默认关闭；开启后六类 Span 全链路埋点 + 四维指标 + 不可篡改审计）
   observability:
     enabled: false
     service-name: langur
     log-spans: true
+    # H5 评估导出后端：logging（默认，仅日志）| prometheus（四维指标 → Micrometer /actuator/prometheus）
+    evaluation: logging
+    # H5 告警分级（§10.3）：P0 阻断+人工 / P1 降级+OnCall / P2 终止+记录 / P3 日报
+    alert:
+      enabled: true
+      latency-millis: 5000          # P1 单次执行耗时上限（毫秒）
+      token-threshold: 32000        # P2 单任务 Token 预警阈值
+      interception-threshold: 1     # P0 安全拦截致命阈值（次）
+      tool-success-rate-floor: 0.95 # P1 工具成功率下限（0..1）
   # T13 API 治理链（默认关闭；开启后 鉴权→租户→限流→幂等→TraceId）
   governance:
     enabled: false
@@ -72,13 +173,28 @@ langur:
       #    user: user-1
     rate-limit:
       permits-per-minute: 600
+  # 代码访问工具源（Coding Agent，默认关闭）：启用并配置 roots 白名单后暴露 read_file/list_dir/grep，
+  # 路径经归一化限制在 roots 内（防越权/遍历），跳过 exclude-dirs，单文件/结果数有上限（防大仓失控）。
+  code-access:
+    enabled: false
+    roots: []
+    #  - /abs/path/to/repo        # 允许访问的仓库根（绝对路径），可多个
+    max-file-bytes: 262144        # 单文件读取字节上限，超出截断
+    max-results: 200              # grep 命中行上限
+    exclude-dirs: [.git, target, node_modules, build, dist]
   # T10a REST API as Tool（默认关闭；启用后工具以 api:{service}:{operationId} 注册，经四层校验链 + SSRF 防护）
   rest-api-tools:
     enabled: false
     credentials: []
     #  - ref: demo-bearer
-    #    type: BEARER            # BEARER / API_KEY / BASIC
-    #    secret: ${DEMO_TOKEN:}
+    #    type: BEARER            # BEARER / API_KEY / BASIC / OAUTH2（H7）
+    #    secret: kms:demo/token  # 密钥支持 env:VAR / prop:name / kms:cipher 引用（明文不落配置/日志）
+    #  - ref: demo-oauth2        # H7：client_credentials 自动获取 + 到期刷新访问令牌
+    #    type: OAUTH2
+    #    token-url: https://idp.example.com/oauth2/token
+    #    client-id: ${DEMO_CLIENT_ID:}
+    #    client-secret: kms:demo/client-secret
+    #    scope: pets.read pets.write
     tools: []
     #  - service-name: weather
     #    operation-id: current
@@ -92,15 +208,31 @@ langur:
     #      properties:
     #        city: { type: string }
     #      required: [city]
+    # H7：OpenAPI 文档自动发现（补手动 tools 方式）——解析文档逐操作生成工具，经四层校验链调用
+    openapi: []
+    #  - service-name: petstore
+    #    spec-resource: openapi/petstore.yaml   # classpath；或用 spec:（内联 JSON/YAML）/ spec-url:（远端，SSRF 校验）
+    #    base-url: https://gw.internal/petstore  # 可选，覆盖文档 servers[0].url
+    #    credential-ref: demo-oauth2
+    #    allowed-hosts: [gw.internal]
+    #    risk-level: MEDIUM
+    #    include-operations: []                  # 为空表示发现全部操作
   # T10b MCP 集成（默认关闭；启用后按 servers 连接/发现工具，以 mcp:{server}:{tool} 注册，经四层校验链 + SSRF 防护）
   # 复用 rest-api-tools.credentials 凭证库（credential-ref）；心跳保活 + 断线懒重连
+  # H6：多传输（HTTP/STDIO/SSE/WS）+ tools/list_changed 热更新 + 按服务端熔断隔离
   mcp-tools:
     enabled: false
     heartbeat-seconds: 30
     protocol-version: "2024-11-05"
+    failure-threshold: 3          # H6：单服务端连续失败达此阈值熔断跳闸
+    circuit-cooldown-seconds: 30  # H6：熔断冷却秒数（期内快速失败，冷却后放行试探）
     servers: []
     #  - name: filesystem
-    #    url: https://mcp.example.com/filesystem/rpc
+    #    transport: HTTP           # HTTP（默认）/ STDIO / SSE / WS（H6）
+    #    url: https://mcp.example.com/filesystem/rpc   # SSE 时作为出站 POST 端点
+    #    sse-url:                  # SSE 入站事件流端点（留空回退 url）
+    #    command: []               # STDIO：本地子进程命令，如 [npx, -y, "@mcp/fs"]
+    #    env: {}                   # STDIO：子进程附加环境变量
     #    credential-ref: demo-bearer
     #    allowed-hosts: [mcp.example.com]
     #    risk-level: LOW

@@ -8,6 +8,7 @@ import org.skylark.langur.application.command.CreateAgentCommand;
 import org.skylark.langur.application.command.MessagePartInput;
 import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.dto.AgentResult;
+import org.skylark.langur.application.dto.ArtifactResult;
 import org.skylark.langur.application.dto.PlanResult;
 import org.skylark.langur.application.dto.PlanStepResult;
 import org.skylark.langur.application.stream.StreamEventHandler;
@@ -112,6 +113,7 @@ public class AgentApplicationService {
         agent.addUserMessage(resolvedUserMessage);
         Plan plan = planningDomainService.createPlan(agent.getId().getValue());
 
+        ExecutionTask task = null;
         try {
             // [E] 范式路由（T6/T9）：bizCode 经 SPI 上下文增强 + 决策引擎提示，再交 LayerRouter 决策
             String bizCode = resolveBizCode(command);
@@ -120,7 +122,7 @@ public class AgentApplicationService {
             RuntimeParadigm paradigm = resolveEffectiveParadigm(
                     layerRouter.paradigmOf(layerRouter.route(bizCode, resolvedUserMessage)));
             // [E] 经 Harness 执行循环驱动：终止闸门 + 生命周期钩子 + 状态快照 + 指标观测
-            ExecutionTask task = ExecutionTask.create(
+            task = ExecutionTask.create(
                     agent.getId().getValue(),
                     bizCode,
                     paradigm,
@@ -139,7 +141,17 @@ public class AgentApplicationService {
         }
 
         agentRepository.save(agent);
-        return agentAssembler.toResult(agent);
+        AgentResult result = agentAssembler.toResult(agent);
+        if (task != null && !task.getArtifacts().isEmpty()) {
+            result.setArtifacts(task.getArtifacts().stream()
+                    .map(artifact -> ArtifactResult.builder()
+                            .name(artifact.getName())
+                            .type(artifact.getType())
+                            .content(artifact.getContent())
+                            .build())
+                    .toList());
+        }
+        return result;
     }
 
     private TerminationGate buildGate(AgentConfig config) {
@@ -152,10 +164,12 @@ public class AgentApplicationService {
     }
 
     /**
-     * [E] 范式路由降级（T6）：Workflow / PlanAndExecute 引擎尚未实现，显式降级为 ReAct 并记录。
+     * [E] 范式路由降级（T6/H3/H9）：ReAct / PlanAndExecute / Workflow / Hybrid 引擎均已落地，直接透传；
+     * 其余（未来新增范式）显式降级为 ReAct 并记录。
      */
     private RuntimeParadigm resolveEffectiveParadigm(RuntimeParadigm routed) {
-        if (routed == RuntimeParadigm.REACT) {
+        if (routed == RuntimeParadigm.REACT || routed == RuntimeParadigm.PLAN_AND_EXECUTE
+                || routed == RuntimeParadigm.WORKFLOW || routed == RuntimeParadigm.HYBRID) {
             return routed;
         }
         log.warn("Runtime paradigm [{}] engine not implemented yet, degrade to REACT", routed);
