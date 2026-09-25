@@ -88,7 +88,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 > **里程碑退出标准**：`DecisionPort` 契约落 domain 且零外部依赖；Jev（TypeSafe REST）适配器可发起判定并解析 `choice/noul/score + confidence`；`record=true` 时判定录制进轨迹快照；决策维度指标可查询；关闭时行为与 v2.0 一致；敏感命名空间强制 local、密钥不出明文。达成 **成熟度 D1（Jev advisory）**。
 
 ### J1. `DecisionPort` 契约 + Jev 适配器 + 规则兜底
-- [ ] 待派发
+- [x] 已完成（2026-09-25）
 - **现状/问题**：系统无统一"判定"端口，所有判定散落在正则/规则/昂贵 M5（v3.0 §1.2）；无快、廉、校准、可批量的 System-1 判定器。
 - **改动要点**：
   - **domain（P1，纯 JDK）**：新增 `port/DecisionPort`（`DecisionResponse decide(DecisionRequest)`）+ `harness/decision/{DecisionRequest, DecisionQuestion, DecisionType(CHOICE|PROBABILITY|SCORE), DecisionResponse, DecisionAnswer(choice/value/confidence/distribution), DecisionThresholds}` 值对象；`DecisionType` 对齐 Jev `choice/noul/score`；`DecisionResponse.usage` 复用 H1 `TokenUsage`。
@@ -328,3 +328,4 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 | 日期 | 任务 | 说明 |
 |------|------|------|
 | 2026-09-25 | — | RoadMap 3.0 创建：依据 v3.0 架构文档规划 J1–J10（决策平面）+ 承接 R0–R5/R-G（RSI，待派发）+ 保留 H11/H12；全部任务待派发，Phase 0（N1–N2）可独立排期，N3–N5 以 RSI 解锁为前置门 |
+| 2026-09-25 | J1 | `DecisionPort` 契约落 domain（`port/DecisionPort` + `harness/decision/{DecisionRequest,DecisionQuestion,DecisionType(choice/noul/score),DecisionResponse,DecisionAnswer,DecisionThresholds}`，纯 JDK 零外部依赖，P1 已断言无 Spring/Jackson import）；usage 复用 H1 `LLMPort.TokenUsage`；infra `TypeSafeDecisionAdapter`（WebClient POST `{state,model,questions{noul\|choice\|score,instructions,criteria}}`，批量投机扇出 state 只发一次，解析 choice/value+confidence+distribution+usage，异常/超时/无问题委派兜底不抛出）+ `RuleFallbackDecisionAdapter`（复用 H10 `OutputContentReviewer`，confidence 恒 0 → J3 ThresholdRouter fail-closed）；DD13 domain 新端口、infra 适配既有 `DecisionEngineSPI`（J3 装配）；适配器不带 `@Component`，J3 条件装配。新增 17 测（domain 7 + infra 10，HttpServer 离线桩），`mvn clean test` 全绿（infra 271→281）。未改装配，无需冒烟 |
