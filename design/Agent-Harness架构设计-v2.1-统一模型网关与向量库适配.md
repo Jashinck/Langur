@@ -322,7 +322,7 @@ langur:
 
 > **融合算法（DD17）**：默认 **RRF**（Reciprocal Rank Fusion，基于排名、免分数归一化、跨检索器稳健）；`weighted` 需先归一化 BM25 与 cosine 分数（尺度不同，需谨慎）。
 
-### 3.7 维度一致性守卫（补 B6）
+### 3.7 维度一致性守卫（补 B6）✅ 已落地（H14.8，2026-09-25）
 
 启动时校验 `langur.vector.dimension` == `EmbeddingPort.dimensions()`（lexical=256 / llm=1536）；不一致 → **fail-fast** 明确报错（或按 embedding 维度自动建索引/collection）。ES `dense_vector.dims`、Milvus `FLOAT_VECTOR.dim`、pgvector `vector(n)` 均由该维度驱动，杜绝硬编码 256 与 llm 1536 冲突导致的静默召回损坏。
 
@@ -415,7 +415,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2/H14.3/H14.4 ✅ 2026-09-25） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2/H14.3/H14.4/H14.8 ✅ 2026-09-25） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---
