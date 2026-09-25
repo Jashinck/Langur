@@ -23,4 +23,47 @@ public interface VectorStore {
      * @return 按相似度降序排列、回填 {@code score} 的记录（至多 topK 条）
      */
     List<VectorRecord> search(String namespace, float[] queryVector, int topK);
+
+    // —— v2.1 增量（H14.1，均 default：既有实现零改动即编译通过，P5）——
+
+    /**
+     * 批量写入（H14.1）：默认逐条转调 {@link #upsert}；ES/Milvus 可覆写为批量 API。
+     * namespace 为冗余便捷参数（记录自带 namespace），供批量路由/校验使用。
+     */
+    default void upsertAll(String namespace, List<VectorRecord> records) {
+        if (records != null) {
+            records.forEach(this::upsert);
+        }
+    }
+
+    /**
+     * 按 namespace + id 删除（H14.1）：默认不支持；具备删除能力的 store 覆写。
+     */
+    default void delete(String namespace, String id) {
+        throw new UnsupportedOperationException("delete not supported by " + getClass().getSimpleName());
+    }
+
+    /**
+     * 结构化检索（H14.1）：默认降级为既有 {@code search(ns, vector, topK)}（忽略 filter/minScore）；
+     * 支持过滤的 store 覆写。namespace 由实现强制过滤（越权红线）。
+     */
+    default List<VectorRecord> search(SearchQuery query) {
+        return search(query.getNamespace(), query.getQueryVector(), query.getTopK());
+    }
+
+    /**
+     * 原生混合检索能力位（H14.1）：{@code VectorMemoryService.recall} 据此分支——
+     * true 且 {@code hybrid.enabled} 时走 {@link #hybridSearch} 原生下推，否则应用侧兜底。
+     */
+    default boolean supportsHybrid() {
+        return false;
+    }
+
+    /**
+     * 原生混合检索（H14.1）：服务端 BM25/稀疏 + ANN 融合（ES retriever.rrf / Milvus hybrid_search）；
+     * 默认不支持，仅 {@link #supportsHybrid()} 为 true 的实现覆写。
+     */
+    default List<VectorRecord> hybridSearch(HybridQuery query) {
+        throw new UnsupportedOperationException("native hybrid not supported by " + getClass().getSimpleName());
+    }
 }

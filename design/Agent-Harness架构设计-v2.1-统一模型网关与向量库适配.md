@@ -215,7 +215,7 @@ langur:
 
 > **策略（已定）**：**原生下推优先，应用侧兜底**。ES/Milvus 在服务端做 BM25/稀疏 + ANN 融合；不支持原生的 store（memory/pgvector）或原生不可用时，回退既有 `EmbeddingRerankPort` 应用侧混合。
 
-### 3.1 `VectorStore` 端口扩展（default 方法，向后兼容 P5）
+### 3.1 `VectorStore` 端口扩展（default 方法，向后兼容 P5）✅ 已落地（H14.1/H14.2，2026-09-25）
 
 ```
 public interface VectorStore {
@@ -415,7 +415,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2 ✅ 2026-09-25） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---
