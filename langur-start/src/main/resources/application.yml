@@ -36,6 +36,9 @@ langur:
       openai:
         enabled: true
         base-url: https://api.openai.com/v1
+        # H13.6：api-key-ref（env:/prop:/kms:）经 SecretResolver 解析，优先于明文 api-key；
+        # kms: 引用缺失 KMS 后端时装配 fail-closed，绝不静默回退明文
+        api-key-ref: env:OPENAI_API_KEY
         api-key: ${OPENAI_API_KEY:${LANGUR_LLM_API_KEY:}}
         model: gpt-4o
       deepseek:

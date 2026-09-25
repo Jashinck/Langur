@@ -7,9 +7,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.skylark.langur.domain.harness.context.vector.EmbeddingPort;
+import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
 import org.skylark.langur.infrastructure.llm.ModelRole;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -39,18 +42,53 @@ public class LlmEmbeddingPort implements EmbeddingPort {
                             LlmProperties llmProperties,
                             LlmGateway llmGateway,
                             ObjectMapper objectMapper) {
+        this(properties, llmProperties, llmGateway, objectMapper, (SecretResolver) null);
+    }
+
+    @Autowired
+    public LlmEmbeddingPort(EmbeddingProperties properties,
+                            LlmProperties llmProperties,
+                            LlmGateway llmGateway,
+                            ObjectMapper objectMapper,
+                            ObjectProvider<SecretResolver> secretResolverProvider) {
+        this(properties, llmProperties, llmGateway, objectMapper, secretResolverProvider.getIfAvailable());
+    }
+
+    /**
+     * H13.6：默认 provider 的 {@code api-key-ref}（env:/prop:/kms:）经 H7 {@link SecretResolver}
+     * 解析后仅注入请求头，绝不落日志；解析为空时回退明文 {@code api-key}（向后兼容）。
+     */
+    private LlmEmbeddingPort(EmbeddingProperties properties,
+                             LlmProperties llmProperties,
+                             LlmGateway llmGateway,
+                             ObjectMapper objectMapper,
+                             SecretResolver secretResolver) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.llmGateway = llmGateway;
         LlmProperties.ProviderProperties provider =
                 llmProperties.getProvider(llmProperties.getDefaultProvider());
         String baseUrl = StringUtils.defaultIfBlank(properties.getBaseUrl(), provider.getBaseUrl());
-        this.apiKey = StringUtils.defaultIfBlank(properties.getApiKey(), provider.getApiKey());
+        this.apiKey = StringUtils.defaultIfBlank(properties.getApiKey(),
+                resolveProviderKey(provider, secretResolver));
         this.model = StringUtils.defaultIfBlank(properties.getModel(),
                 llmGateway.resolveModel(ModelRole.EMBEDDING));
         this.webClient = WebClient.builder()
                 .baseUrl(StringUtils.defaultIfBlank(baseUrl, "https://api.openai.com/v1"))
                 .build();
+    }
+
+    private static String resolveProviderKey(LlmProperties.ProviderProperties provider,
+                                            SecretResolver secretResolver) {
+        if (secretResolver != null && StringUtils.isNotBlank(provider.getApiKeyRef())) {
+            String resolved = secretResolver.resolve(provider.getApiKeyRef())
+                    .filter(StringUtils::isNotBlank)
+                    .orElse(null);
+            if (resolved != null) {
+                return resolved;
+            }
+        }
+        return provider.getApiKey();
     }
 
     @Override
