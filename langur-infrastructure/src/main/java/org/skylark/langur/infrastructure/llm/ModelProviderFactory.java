@@ -3,6 +3,7 @@ package org.skylark.langur.infrastructure.llm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 
 import java.util.ArrayList;
@@ -48,17 +49,25 @@ public class ModelProviderFactory {
         return Map.copyOf(templates);
     }
 
+    public List<ModelRoutableLLMPort> create(LlmProperties properties, ObjectMapper objectMapper) {
+        return create(properties, objectMapper, null);
+    }
+
     /**
      * 按配置产出全部启用的 provider 适配器；顺序即 YAML 声明顺序（路由首个前缀命中优先）。
+     * <p>H13.6：{@code api-key-ref}（env:/prop:/kms:）优先于明文 {@code api-key}，经 H7
+     * {@link SecretResolver} 解析；解析结果只注入请求头，绝不落日志。{@code kms:} 引用在缺失
+     * KMS 后端时由 resolver fail-closed 抛错（此处不捕获，装配即失败）。</p>
      */
-    public List<ModelRoutableLLMPort> create(LlmProperties properties, ObjectMapper objectMapper) {
+    public List<ModelRoutableLLMPort> create(LlmProperties properties, ObjectMapper objectMapper,
+                                             SecretResolver secretResolver) {
         List<ModelRoutableLLMPort> adapters = new ArrayList<>();
         properties.getProviders().forEach((name, providerProperties) -> {
             boolean enabled = providerProperties.enabledOrDefault(BUILTIN_DEFAULT_PROVIDER.equals(name));
             if (!enabled) {
                 return;
             }
-            adapters.add(createAdapter(name, providerProperties, objectMapper));
+            adapters.add(createAdapter(name, withResolvedApiKey(providerProperties, secretResolver), objectMapper));
         });
         if (!properties.getProviders().containsKey(BUILTIN_DEFAULT_PROVIDER)) {
             // matchIfMissing 语义：完全未配置 openai 时仍注册内置默认，保证 default-provider 可用
@@ -67,6 +76,30 @@ public class ModelProviderFactory {
         log.info("[LLM] provider factory created {} adapter(s): {}", adapters.size(),
                 adapters.stream().map(ModelRoutableLLMPort::getProviderName).toList());
         return adapters;
+    }
+
+    /**
+     * 解析 {@code api-key-ref} 为明文并返回携带解析结果的配置副本（原配置不被改写）。
+     * 引用未配置或解析为空时回退既有明文 {@code api-key}（向后兼容）。
+     */
+    private LlmProperties.ProviderProperties withResolvedApiKey(LlmProperties.ProviderProperties source,
+                                                                SecretResolver secretResolver) {
+        String resolved = null;
+        if (secretResolver != null && StringUtils.isNotBlank(source.getApiKeyRef())) {
+            resolved = secretResolver.resolve(source.getApiKeyRef()).filter(StringUtils::isNotBlank).orElse(null);
+        }
+        if (resolved == null) {
+            return source;
+        }
+        LlmProperties.ProviderProperties copy = new LlmProperties.ProviderProperties();
+        copy.setEnabled(source.getEnabled());
+        copy.setType(source.getType());
+        copy.setBaseUrl(source.getBaseUrl());
+        copy.setApiKey(resolved);
+        copy.setApiKeyRef(null);
+        copy.setModel(source.getModel());
+        copy.setModelPrefixes(source.getModelPrefixes());
+        return copy;
     }
 
     private ModelRoutableLLMPort createAdapter(String name,

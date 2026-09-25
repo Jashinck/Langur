@@ -158,7 +158,7 @@ String complete(...)  // 保留
 
 OpenAI 兼容基类 override `completeWithUsage` 解析 `usage`（复用 H1 `parseUsage`）。补全路径由此纳入真实计量。
 
-#### ⑥ API Key 经 SecretResolver
+#### ⑥ API Key 经 SecretResolver ✅ 已落地（H13.6，2026-09-25）
 
 `ProviderProperties.apiKeyRef`（`env:/prop:/kms:`）优先于 `apiKey`，经 H7 `CompositeSecretResolver` 解析；解析结果**只注入请求头，绝不落日志**（复用 `Credential` 不生成 toString 的防泄露约定）。缺失 `kms:` 后端时 fail-closed（与 H7 一致）。
 
@@ -414,7 +414,7 @@ langur:
 | 级别 | 能力 | 依赖 | 风险 |
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
-| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低 |
+| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（进度：H13.1/H13.4/H13.6 ✅ 2026-09-25） |
 | **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
