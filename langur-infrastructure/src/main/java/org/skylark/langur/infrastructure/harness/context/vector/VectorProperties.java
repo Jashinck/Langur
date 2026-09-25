@@ -62,7 +62,7 @@ public class VectorProperties {
         private boolean nativeRrf = false;
     }
 
-    /** Milvus 连接（DD16 官方 SDK；H14.6）。 */
+    /** Milvus 连接（H14.6；DD16 偏差：RESTful v2/WebClient 直连而非官方 SDK，理由见 RoadMap 2.1 §10 完成记录）。 */
     @Getter
     @Setter
     public static class Milvus {

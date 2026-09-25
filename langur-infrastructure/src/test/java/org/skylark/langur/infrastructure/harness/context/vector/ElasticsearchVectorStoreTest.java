@@ -286,39 +286,6 @@ class ElasticsearchVectorStoreTest {
         assertEquals(0.7, fused.get(0).getScore(), 1e-9);
     }
 
-    // —— 融合纯函数（离线可测，无 HTTP）——
-
-    @Test
-    void shouldComputeRrfFusionDeterministically() {
-        List<VectorRecord> lexical = List.of(record("ns", "A", "a"), record("ns", "B", "b"));
-        List<VectorRecord> semantic = List.of(record("ns", "B", "b"), record("ns", "C", "c"));
-
-        List<VectorRecord> fused = ElasticsearchVectorStore.fuseRrf(List.of(lexical, semantic), 60, 10);
-
-        assertEquals(List.of("B", "A", "C"), fused.stream().map(VectorRecord::getId).toList());
-        assertEquals(1.0 / 61, fused.get(1).getScore(), 1e-9);
-        assertEquals(1.0 / 62, fused.get(2).getScore(), 1e-9);
-        assertEquals(2, ElasticsearchVectorStore.fuseRrf(List.of(lexical, semantic), 60, 2).size(),
-                "topK 截断");
-    }
-
-    @Test
-    void shouldComputeWeightedFusionWithMinMaxNormalization() {
-        List<VectorRecord> lexical = List.of(
-                record("ns", "A", "a").toBuilder().score(2.0).build(),
-                record("ns", "B", "b").toBuilder().score(1.0).build());
-        List<VectorRecord> semantic = List.of(
-                record("ns", "B", "b").toBuilder().score(0.9).build(),
-                record("ns", "C", "c").toBuilder().score(0.1).build());
-
-        List<VectorRecord> fused = ElasticsearchVectorStore.fuseWeighted(lexical, semantic, 0.3, 10);
-
-        assertEquals(List.of("B", "A", "C"), fused.stream().map(VectorRecord::getId).toList());
-        assertEquals(0.7, fused.get(0).getScore(), 1e-9, "B = 0.7*1.0(语义归一) + 0.3*0.0(词面归一)");
-        assertEquals(0.3, fused.get(1).getScore(), 1e-9);
-        assertEquals(0.0, fused.get(2).getScore(), 1e-9);
-    }
-
     // —— 桩基础设施 ——
 
     private static String hits(String... hitJsons) {
