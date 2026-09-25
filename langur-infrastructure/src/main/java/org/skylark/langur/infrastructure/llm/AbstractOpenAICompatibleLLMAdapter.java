@@ -96,8 +96,7 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
 
             return parseDecision(response);
         } catch (Exception e) {
-            log.error("{} LLM call failed", getProviderName(), e);
-            return LLMDecision.finalAnswer("Error communicating with LLM: " + e.getMessage());
+            throw providerException("decide", e);
         }
     }
 
@@ -122,8 +121,7 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
             JsonNode root = objectMapper.readTree(response);
             return root.at("/choices/0/message/content").asText();
         } catch (Exception e) {
-            log.error("{} LLM completion failed", getProviderName(), e);
-            return "Error: " + e.getMessage();
+            throw providerException("complete", e);
         }
     }
 
@@ -148,9 +146,18 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
                     .toStream()
                     .forEach(chunk -> extractStreamDelta(chunk).ifPresent(tokenConsumer));
         } catch (Exception e) {
-            log.error("{} LLM stream failed", getProviderName(), e);
-            tokenConsumer.accept("Error: " + e.getMessage());
+            throw providerException("streamComplete", e);
         }
+    }
+
+    /**
+     * 传输层异常统一转 {@link ModelProviderException}（H13.4）：只有传输/非 2xx/反序列化失败才抛出；
+     * 模型正常返回的内容（即便含 "error" 文本）原样透传，不算失败。
+     * 不在适配器层打完整堆栈（底层异常消息可能含密钥查询参数），细节留给上层按需排查。
+     */
+    protected ModelProviderException providerException(String operation, Exception cause) {
+        log.debug("{} {} failed", getProviderName(), operation, cause);
+        return new ModelProviderException(getProviderName(), operation, cause);
     }
 
     private Optional<String> extractStreamDelta(String chunk) {

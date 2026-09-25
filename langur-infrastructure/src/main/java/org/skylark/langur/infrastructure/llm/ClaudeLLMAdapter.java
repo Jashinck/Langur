@@ -70,8 +70,7 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
             String response = execute(requestBody);
             return parseDecision(response);
         } catch (Exception e) {
-            log.error("Claude LLM call failed", e);
-            return LLMDecision.finalAnswer("Error communicating with LLM: " + e.getMessage());
+            throw providerException("decide", e);
         }
     }
 
@@ -89,9 +88,14 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
             content.addObject().put("type", "text").put("text", userMessage);
             return extractText(execute(requestBody));
         } catch (Exception e) {
-            log.error("Claude completion failed", e);
-            return "Error: " + e.getMessage();
+            throw providerException("complete", e);
         }
+    }
+
+    /** 传输层异常统一转 {@link ModelProviderException}（H13.4），不打完整堆栈防密钥泄露。 */
+    private ModelProviderException providerException(String operation, Exception cause) {
+        log.debug("Claude {} failed", operation, cause);
+        return new ModelProviderException(getProviderName(), operation, cause);
     }
 
     private ObjectNode buildBaseRequest(String systemPrompt, String model,

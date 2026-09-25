@@ -61,8 +61,7 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
             String response = execute(resolveModel(model), requestBody);
             return parseDecision(response);
         } catch (Exception e) {
-            log.error("Gemini LLM call failed", e);
-            return LLMDecision.finalAnswer("Error communicating with LLM: " + e.getMessage());
+            throw providerException("decide", e);
         }
     }
 
@@ -73,9 +72,17 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
             String response = execute(resolveModel(model), requestBody);
             return extractText(response);
         } catch (Exception e) {
-            log.error("Gemini completion failed", e);
-            return "Error: " + e.getMessage();
+            throw providerException("complete", e);
         }
+    }
+
+    /**
+     * 传输层异常统一转 {@link ModelProviderException}（H13.4）。
+     * Gemini 的 key 走查询参数，底层异常消息可能含完整 URI，故绝不打堆栈/拼接底层消息。
+     */
+    private ModelProviderException providerException(String operation, Exception cause) {
+        log.debug("Gemini {} failed", operation);
+        return new ModelProviderException(getProviderName(), operation, cause);
     }
 
     private ObjectNode buildRequest(String systemPrompt, List<Map<String, String>> conversationHistory,

@@ -138,7 +138,7 @@ glm:
 
 `ModelRoutableLLMPort.supportsModel(model)` 改为匹配 `modelPrefixes` 任一前缀；未配置前缀时回退按 `provider.model` 精确/前缀匹配。`LLMRouter.route` 逻辑不变。
 
-#### ④ 错误传播修复（使 fallback 生效）
+#### ④ 错误传播修复（使 fallback 生效）✅ 已落地（H13.4，2026-09-25）
 
 - 适配器在**传输/HTTP/解析失败**时抛 infra `ModelProviderException`（不再吞成 `"Error: ..."`）。
 - `LlmGateway.withFallback` 捕获 `ModelProviderException` → 试链中下一个；链耗尽 → 抛 `IllegalStateException`（现状语义保留）。
