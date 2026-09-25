@@ -66,6 +66,11 @@ public class LlmGateway {
         return withFallback(role, model -> llmPort.complete(systemPrompt, model, userMessage));
     }
 
+    /** 补全并回传真实 Token 计量（H13.5）：降级链语义与 {@link #complete} 一致。 */
+    public LLMPort.CompletionResult completeWithUsage(ModelRole role, String systemPrompt, String userMessage) {
+        return withFallback(role, model -> llmPort.completeWithUsage(systemPrompt, model, userMessage));
+    }
+
     public LLMPort.LLMDecision decide(ModelRole role, String systemPrompt,
                                       List<Map<String, String>> conversationHistory,
                                       List<Tool> availableTools) {

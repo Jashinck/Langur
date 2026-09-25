@@ -34,6 +34,13 @@ public class LLMRouter implements LLMPort {
         return route(resolvedModel).complete(systemPrompt, resolvedModel, userMessage);
     }
 
+    /** H13.5：路由后透传真实 usage，避免默认实现降级为空计量。 */
+    @Override
+    public CompletionResult completeWithUsage(String systemPrompt, String model, String userMessage) {
+        String resolvedModel = resolveModel(model);
+        return route(resolvedModel).completeWithUsage(systemPrompt, resolvedModel, userMessage);
+    }
+
     @Override
     public void streamComplete(String systemPrompt, String model, String userMessage,
                                Consumer<String> tokenConsumer) {
