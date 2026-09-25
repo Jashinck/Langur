@@ -41,26 +41,38 @@ langur:
         api-key-ref: env:OPENAI_API_KEY
         api-key: ${OPENAI_API_KEY:${LANGUR_LLM_API_KEY:}}
         model: gpt-4o
+        model-prefixes: [gpt-, o1-, o3-]
       deepseek:
         enabled: false
         base-url: https://api.deepseek.com/v1
         api-key: ${DEEPSEEK_API_KEY:}
         model: deepseek-chat
+        model-prefixes: [deepseek-]
       qwen:
         enabled: false
         base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
         api-key: ${QWEN_API_KEY:}
         model: qwen-max
+        model-prefixes: [qwen-]
+      # H13.2：GLM/智谱纯配置接入（零 Java 代码），验证 H13.1 工厂"零代码扩厂"
+      glm:
+        enabled: false
+        base-url: https://open.bigmodel.cn/api/paas/v4
+        api-key-ref: env:GLM_API_KEY
+        model: glm-4-plus
+        model-prefixes: [glm-, chatglm-]
       claude:
         enabled: false
         base-url: https://api.anthropic.com
         api-key: ${CLAUDE_API_KEY:}
         model: claude-3-5-sonnet-20241022
+        model-prefixes: [claude-]
       gemini:
         enabled: false
         base-url: https://generativelanguage.googleapis.com
         api-key: ${GEMINI_API_KEY:}
         model: gemini-1.5-pro
+        model-prefixes: [gemini-]
     routing-rules:
       fast: deepseek-chat
       powerful: gpt-4o
