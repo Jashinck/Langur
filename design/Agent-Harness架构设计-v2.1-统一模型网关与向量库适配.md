@@ -261,15 +261,17 @@ recall(ns, query, topK, budget):
 
 > 现有 memory/pgvector 路径**完全不变**（`supportsHybrid()=false` → 走 search + app-side rerank）。ES/Milvus 打开 `supportsHybrid()=true` 才走原生。
 
-### 3.3 `ElasticsearchVectorStore`（`store=elasticsearch`）
+### 3.3 `ElasticsearchVectorStore`（`store=elasticsearch`）✅ 已落地（H14.5，2026-09-25）
 
 - **索引 mapping**：`content` → `text`（BM25，中文可选 `ik_max_word`/`smartcn` 分词器）；`embedding` → `dense_vector(dims=配置维度, similarity=cosine, index=true)`；`namespace` → `keyword`；`metadata.*` → `keyword`/数值。
 - **纯向量**：`knn` 查询（`field=embedding, query_vector, k, num_candidates, filter`）。
 - **原生混合**：`retriever` 框架的 **`rrf`** 融合 `standard`(BM25 `match`) + `knn`——服务端一次往返完成融合（下推）。
 - ⚠️ **授权核实（DD20，强制）**：ES 的 **RRF retriever 历史上属付费授权层（Platinum/Enterprise）**。**落地前必须核实当前版本授权**。若未授权 → **降级方案**：分别发 BM25 查询 + kNN 查询，客户端做 **RRF 融合**（基于排名、免分数归一化，~20 行）或加权归一化。既保留"混合"语义，又不被授权卡死（P10）。
+  - ✅ **已核实并落地**：RRF retriever 确属 Platinum+ 付费层 → 缺省 `native-rrf=false` 走"两查询 + 客户端 RRF 融合"（纯静态函数，RRF/WEIGHTED 双模式）；授权环境可开启原生 `retriever.rrf`，任何原生失败自动降级客户端融合。
 - **客户端（DD15）**：官方 `co.elastic.clients:elasticsearch-java`（贴合既有 WebClient 风格、避免 Spring Data 锁定）vs `spring-data-elasticsearch`。倾向官方客户端。
-- **命名空间映射（DD18）**：单索引 + `namespace` keyword 字段过滤（默认，运维简单）vs 每命名空间一索引（隔离强）。
-- **凭证**：`username` + `password-ref`（经 `SecretResolver`）；`uris` 经 `SsrfGuard` 校验（自部署内网走白名单）；建议 TLS。
+  - ⚠️ **落地偏差**：实际以 **WebClient REST 直连**替代官方 SDK——pom 无该依赖，重依赖易冲突且难以离线确定性单测（验收硬约束）；REST 契约与 SDK 等价且更贴合工程既有 WebClient 风格（详见 RoadMap 2.1 §10）。
+- **命名空间映射（DD18）**：单索引 + `namespace` keyword 字段过滤（默认，运维简单）vs 每命名空间一索引（隔离强）。✅ 采用单索引 + `namespace` 强制过滤，`_id = namespace::id` 幂等 UPSERT。
+- **凭证**：`username` + `password-ref`（经 `SecretResolver`）；`uris` 经 `SsrfGuard` 校验（自部署内网走白名单）；建议 TLS。✅ 已落地：解析为空/无 resolver 均 fail-closed；明文仅注入 Basic 认证头，不落日志/异常/请求体。
 
 ### 3.4 `MilvusVectorStore`（`store=milvus`）
 
@@ -415,7 +417,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2/H14.3/H14.4/H14.8 ✅ 2026-09-25） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20 已核实关闭：缺省客户端融合）（进度：H14.1/H14.2/H14.3/H14.4/H14.5/H14.8 ✅ 2026-09-25） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---

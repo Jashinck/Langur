@@ -105,7 +105,7 @@ langur:
     #   index: langur_vectors
     #   username: ""
     #   password-ref: env:ES_PASSWORD
-    #   native-rrf: true        # DD20：false 则降级为两查询 + 客户端 RRF 融合
+    #   native-rrf: false       # DD20 已核实：RRF retriever 为 Platinum+ 付费授权；缺省两查询+客户端 RRF 融合，授权环境可开启（失败自动降级）
     # milvus:                   # H14.6，store=milvus 时生效
     #   uri: http://localhost:19530
     #   collection: langur_vectors
