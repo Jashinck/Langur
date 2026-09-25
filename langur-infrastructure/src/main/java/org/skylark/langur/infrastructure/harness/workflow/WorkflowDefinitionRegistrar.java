@@ -1,7 +1,9 @@
 package org.skylark.langur.infrastructure.harness.workflow;
 
 import lombok.extern.slf4j.Slf4j;
+import org.skylark.langur.domain.harness.decision.DecisionType;
 import org.skylark.langur.domain.harness.workflow.DefaultWorkflowRepository;
+import org.skylark.langur.domain.harness.workflow.StageDecisionGate;
 import org.skylark.langur.domain.harness.workflow.WorkflowDefinition;
 import org.skylark.langur.domain.harness.workflow.WorkflowStage;
 
@@ -60,15 +62,35 @@ public class WorkflowDefinitionRegistrar {
 
     private WorkflowStage toStage(WorkflowProperties.StageProps stage) {
         boolean produces = stage.getArtifactName() != null && !stage.getArtifactName().isBlank();
+        WorkflowStage result;
         if (stage.isRequiresApproval()) {
-            return produces
+            result = produces
                     ? WorkflowStage.approvalArtifact(stage.getId(), stage.getInstruction(),
                             stage.getArtifactName(), stage.getArtifactType())
                     : WorkflowStage.approval(stage.getId(), stage.getInstruction());
+        } else {
+            result = produces
+                    ? WorkflowStage.artifact(stage.getId(), stage.getInstruction(),
+                            stage.getArtifactName(), stage.getArtifactType())
+                    : WorkflowStage.of(stage.getId(), stage.getInstruction());
         }
-        return produces
-                ? WorkflowStage.artifact(stage.getId(), stage.getInstruction(),
-                        stage.getArtifactName(), stage.getArtifactType())
-                : WorkflowStage.of(stage.getId(), stage.getInstruction());
+        if (stage.isCritical()) {
+            // J5（P12②）：CRITICAL 审批阶段恒人审，决策平面绝不自动放行
+            result = result.withCritical(true);
+        }
+        StageDecisionGate gate = toGate(stage.getDecisionGate());
+        return gate != null ? result.withDecisionGate(gate) : result;
+    }
+
+    /** J4：映射阶段决策闸门配置；key/instructions 缺失 → 不生效（回落默认顺序，P10）。 */
+    private StageDecisionGate toGate(WorkflowProperties.DecisionGateProps props) {
+        if (props == null || props.getKey() == null || props.getKey().isBlank()
+                || props.getInstructions() == null || props.getInstructions().isBlank()) {
+            return null;
+        }
+        DecisionType type = DecisionType.fromWireName(props.getType());
+        double threshold = props.getThreshold() != null ? props.getThreshold() : 0;
+        return new StageDecisionGate(props.getKey(), type, props.getInstructions(),
+                props.getCriteria(), threshold, props.getBranchTo());
     }
 }

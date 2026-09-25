@@ -10,7 +10,7 @@ import lombok.Getter;
  * （强合规/审批边界），未批准则挂起任务，批准后从快照恢复。</p>
  */
 @Getter
-@Builder
+@Builder(toBuilder = true)
 public class WorkflowStage {
 
     /** 阶段标识，快照/审批/进度回报以此定位。 */
@@ -27,6 +27,12 @@ public class WorkflowStage {
 
     /** 产物类型（可选，缺省 text）：如 report / approval-items。 */
     private final String artifactType;
+
+    /** 是否为 CRITICAL 级审批阶段（J5，P12②）：真则**恒人审**，决策平面绝不参与自动放行。 */
+    private final boolean critical;
+
+    /** 阶段决策闸门（J4，可选）：阶段产出后经 DecisionPort 判定走向；未配置走默认固定顺序。 */
+    private final StageDecisionGate decisionGate;
 
     public static WorkflowStage of(String id, String instruction) {
         return WorkflowStage.builder().id(id).instruction(instruction).requiresApproval(false).build();
@@ -52,5 +58,20 @@ public class WorkflowStage {
     /** 该阶段是否声明了具名产物。 */
     public boolean producesArtifact() {
         return artifactName != null && !artifactName.isBlank();
+    }
+
+    /** 该阶段是否配置了决策闸门（J4）。 */
+    public boolean hasDecisionGate() {
+        return decisionGate != null;
+    }
+
+    /** 复制并挂载决策闸门（J4，配置驱动 P9）。 */
+    public WorkflowStage withDecisionGate(StageDecisionGate gate) {
+        return toBuilder().decisionGate(gate).build();
+    }
+
+    /** 复制并设置 CRITICAL 级审批标记（J5，P12②恒人审）。 */
+    public WorkflowStage withCritical(boolean value) {
+        return toBuilder().critical(value).build();
     }
 }

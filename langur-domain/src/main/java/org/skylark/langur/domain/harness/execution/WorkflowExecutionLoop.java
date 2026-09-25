@@ -1,5 +1,10 @@
 package org.skylark.langur.domain.harness.execution;
 
+import org.skylark.langur.domain.harness.decision.DecisionAnswer;
+import org.skylark.langur.domain.harness.decision.DecisionQuestion;
+import org.skylark.langur.domain.harness.decision.DecisionRequest;
+import org.skylark.langur.domain.harness.decision.DecisionResponse;
+import org.skylark.langur.domain.harness.decision.DecisionThresholds;
 import org.skylark.langur.domain.harness.evaluation.EvaluationService;
 import org.skylark.langur.domain.harness.evaluation.ExecutionMetrics;
 import org.skylark.langur.domain.harness.evaluation.MetricDimension;
@@ -15,6 +20,8 @@ import org.skylark.langur.domain.harness.state.StateSnapshot;
 import org.skylark.langur.domain.harness.state.TaskState;
 import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.harness.state.TaskStateStatus;
+import org.skylark.langur.domain.harness.workflow.GateRoute;
+import org.skylark.langur.domain.harness.workflow.StageDecisionGate;
 import org.skylark.langur.domain.harness.workflow.WorkflowDefinition;
 import org.skylark.langur.domain.harness.workflow.WorkflowRepository;
 import org.skylark.langur.domain.harness.workflow.WorkflowStage;
@@ -23,6 +30,7 @@ import org.skylark.langur.domain.model.agent.AgentStatus;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
 import org.skylark.langur.domain.model.plan.StepStatus;
+import org.skylark.langur.domain.port.DecisionPort;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,6 +54,9 @@ import java.util.UUID;
  */
 public class WorkflowExecutionLoop implements ExecutionLoopService {
 
+    /** J6：产物验收不达标时的有界重试上限（受终止闸门双重约束，绝不无限重试）。 */
+    private static final int MAX_ARTIFACT_RETRIES = 1;
+
     private final ExecutionLoopService stageExecutor;
     private final RuntimeParadigm stageParadigm;
     private final WorkflowRepository workflowRepository;
@@ -56,6 +67,15 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
 
     /** 进度回报端口（可选装配，§13.3）；缺省 NOOP（P10）。 */
     private ExecutionProgressPort progressPort = ExecutionProgressPort.NOOP;
+
+    /**
+     * 决策平面端口（J4–J6，可选装配，v3.0 §3.1）。缺省 {@code null} → 全部插入点走规则/默认顺序兜底，
+     * 行为与 v2.0 完全一致（P10/P12①）。装配时为 J3 装饰链（录制 ⊃ 缓存 ⊃ 阈值 ⊃ 后端）。
+     */
+    private DecisionPort decisionPort;
+
+    /** 各插入点置信阈值（J5 审批自动放行 / J6 产物验收）；缺省 DD11 经验值。 */
+    private DecisionThresholds decisionThresholds = DecisionThresholds.defaults();
 
     public WorkflowExecutionLoop(ExecutionLoopService stageExecutor,
                                  RuntimeParadigm stageParadigm,
@@ -76,6 +96,18 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
     public void attachProgressPort(ExecutionProgressPort progressPort) {
         if (progressPort != null) {
             this.progressPort = progressPort;
+        }
+    }
+
+    /**
+     * 装配决策平面（J4–J6，可选）：注入 J3 装饰链端口 + 各插入点置信阈值。
+     * <p>{@code null} 端口 → 保持缺省，全部插入点走规则/默认顺序兜底（P10/P12①）；
+     * {@code null} 阈值 → 沿用 DD11 缺省（approval-auto 0.90 / artifact-accept 0.80）。</p>
+     */
+    public void attachDecisionPlane(DecisionPort decisionPort, DecisionThresholds thresholds) {
+        this.decisionPort = decisionPort;
+        if (thresholds != null) {
+            this.decisionThresholds = thresholds;
         }
     }
 
@@ -106,14 +138,32 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
         publish(task, "workflow", "start [" + definition.getName() + "] stages=" + stageTotal
                 + " layer=WORKFLOW stageExecutor=" + stageParadigm.name());
 
-        for (WorkflowStage stage : stages) {
+        int branchBudget = stages.size(); // J4：分支跳转防环预算（跳转次数不超过阶段总数）
+        int index = 0;
+        while (index < stages.size()) {
+            WorkflowStage stage = stages.get(index);
             if (task.gateTripped()) {
                 gateTripped = true;
                 break;
             }
             if (completed.contains(stage.getId())) {
                 publish(task, "progress", "stage " + stage.getId() + " already completed, skip");
+                index++;
                 continue;
+            }
+            // J4：上一阶段决策闸门若升级过人审（挂起后恢复续跑），DENIED/PENDING 不得越过（只收紧，P12②）
+            if (index > 0 && approvalPort != null) {
+                GateApprovalBlock block = findBlockingGateApproval(task, stages.get(index - 1).getId());
+                if (block != null) {
+                    suspended = block.pending();
+                    terminateReason = (block.pending()
+                            ? "Workflow stage awaiting approval: decision-gate "
+                            : "Decision gate approval denied: ")
+                            + stages.get(index - 1).getId() + " [" + block.requestId() + "]";
+                    publish(task, "approval", terminateReason);
+                    snapshotStage(task, state, agent, plan, completed, stageTotal, approvals);
+                    break;
+                }
             }
             task.nextRound();
             int stepIndex = plan.getSteps().size();
@@ -126,7 +176,7 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
             plan.addStep(running);
             publish(task, "progress", "stage " + stage.getId() + " started: " + abbreviate(stage.getInstruction()));
 
-            // 审批闸门（强合规边界）
+            // 审批闸门（强合规边界）；J5：非 CRITICAL 且决策平面在场 → score 三分流（低风险自动放行快路）
             if (stage.isRequiresApproval()) {
                 if (approvalPort == null) {
                     // fail-closed：需审批却无审批后端 → 中断，不放行
@@ -138,7 +188,7 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                     break;
                 }
                 approvals++;
-                ApprovalGate gate = checkApproval(task, stage);
+                ApprovalGate gate = checkApproval(task, goal, stage);
                 if (gate.decision() == Decision.DENIED) {
                     plan.updateStep(stepIndex, running.withFailure("approval denied"));
                     terminateReason = "Workflow approval denied: " + stage.getId() + " [" + gate.requestId() + "]";
@@ -165,7 +215,8 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                     observations.add(outcome.answer);
                 }
                 if (stage.producesArtifact()) {
-                    task.addArtifact(stage.getArtifactName(), stage.getArtifactType(), outcome.answer);
+                    // J6：addArtifact 前经决策平面 score 验收（低于阈值 → 有界重试或打标不阻断）
+                    task.addArtifact(reviewArtifact(task, agent, stage, outcome));
                 }
                 plan.updateStep(stepIndex, running.withObservation(outcome.answer));
                 publish(task, "progress", "stage " + stage.getId() + " completed");
@@ -177,6 +228,64 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                 break;
             }
             snapshotStage(task, state, agent, plan, completed, stageTotal, approvals);
+
+            // J4：阶段产出后经决策闸门判定走向；低置信/缺失 → RUN_NEXT 默认顺序兜底（P10）
+            GateRoute route = evaluateStageGate(task, stage, outcome.answer);
+            if (route == GateRoute.SKIP && index + 1 < stages.size()) {
+                WorkflowStage next = stages.get(index + 1);
+                completed.add(next.getId());
+                publish(task, "progress", "stage " + next.getId() + " skipped by decision gate (J4)");
+                snapshotStage(task, state, agent, plan, completed, stageTotal, approvals);
+            } else if (route == GateRoute.BRANCH) {
+                String target = stage.getDecisionGate().branchStageId();
+                int targetIndex = indexOfStage(stages, target);
+                if (targetIndex >= 0 && branchBudget > 0) {
+                    branchBudget--;
+                    publish(task, "progress", "decision gate branch: " + stage.getId()
+                            + " -> " + stages.get(targetIndex).getId());
+                    index = targetIndex;
+                    continue;
+                }
+                publish(task, "progress", "decision gate branch ignored (unknown target '"
+                        + target + "' or budget exhausted), default order");
+            } else if (route == GateRoute.ABORT) {
+                terminateReason = "Workflow aborted by decision gate at stage: " + stage.getId();
+                publish(task, "progress", terminateReason);
+                break;
+            } else if (route == GateRoute.REQUIRE_APPROVAL) {
+                if (approvalPort == null) {
+                    terminateReason = "Decision gate requires approval but no approval backend configured: "
+                            + stage.getId();
+                    publish(task, "approval", terminateReason);
+                    break;
+                }
+                approvals++;
+                String gateToolId = "workflow-gate:" + stage.getId();
+                Optional<ApprovalRequest> existing = approvalPort.findLatest(task.getTaskId(), gateToolId);
+                if (existing.isEmpty()) {
+                    ApprovalRequest request = ApprovalRequest.of(UUID.randomUUID().toString(), task.getTaskId(),
+                            "workflow:" + task.getBizCode(), gateToolId,
+                            "Decision gate escalation at stage: " + stage.getId());
+                    approvalPort.save(request);
+                    suspended = true;
+                    terminateReason = "Workflow stage awaiting approval: decision-gate " + stage.getId()
+                            + " [" + request.getRequestId() + "]";
+                } else if (existing.get().getStatus() == ApprovalStatus.DENIED) {
+                    terminateReason = "Decision gate approval denied: " + stage.getId()
+                            + " [" + existing.get().getRequestId() + "]";
+                } else if (existing.get().getStatus() == ApprovalStatus.PENDING) {
+                    suspended = true;
+                    terminateReason = "Workflow stage awaiting approval: decision-gate " + stage.getId()
+                            + " [" + existing.get().getRequestId() + "]";
+                } else {
+                    publish(task, "approval", "decision gate already approved, proceed");
+                }
+                if (terminateReason != null) {
+                    publish(task, "approval", terminateReason);
+                    break;
+                }
+            }
+            index++;
         }
 
         finalizeTask(task, agent, state, plan, observations, gateTripped, suspended, terminateReason);
@@ -213,11 +322,39 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
         return StageOutcome.failure(subTask.getConsumedTokens(), reason);
     }
 
-    /** 审批闸门校验：以 taskId 为关联键（跨 resume 稳定）；无单则创建 PENDING 并挂起。 */
-    private ApprovalGate checkApproval(ExecutionTask task, WorkflowStage stage) {
+    /**
+     * 审批闸门校验：以 taskId 为关联键（跨 resume 稳定）；无单则创建 PENDING 并挂起。
+     * <p>J5（插入点 ②）：无既有单且 <b>非 CRITICAL</b> 且决策平面在场时，先经 {@code score} 三分流——
+     * 安全分与置信均 ≥ {@code approval-auto}（0.90）→ 策略内自动放行快路（留 APPROVED 审批单可溯源）；
+     * 中分/高分风险/低置信 → 人审（fail-closed，P12③）。<b>CRITICAL 恒人审</b>：绝不咨询决策平面、
+     * 绝不自动放行（P12②只收紧不放松）。</p>
+     */
+    private ApprovalGate checkApproval(ExecutionTask task, String goal, WorkflowStage stage) {
         String approvalToolId = "workflow:" + stage.getId();
         Optional<ApprovalRequest> existing = approvalPort.findLatest(task.getTaskId(), approvalToolId);
         if (existing.isEmpty()) {
+            if (!stage.isCritical() && decisionPort != null) {
+                DecisionAnswer answer = decideQuietly(approvalState(stage, goal),
+                        DecisionQuestion.score("approval-auto",
+                                "评估自动放行该工作流审批阶段的合规安全分（0-1，越安全越高）；仅在高分且高置信时可自动放行"));
+                boolean autoPass = answer != null
+                        && answer.confidence() >= decisionThresholds.approvalAuto()
+                        && answer.value() >= decisionThresholds.approvalAuto();
+                emitRouteCount(autoPass ? "approve" : "fail_closed");
+                ApprovalRequest request = ApprovalRequest.of(UUID.randomUUID().toString(), task.getTaskId(),
+                        "workflow:" + task.getBizCode(), approvalToolId,
+                        "Workflow stage approval: " + stage.getId());
+                if (autoPass) {
+                    request.approve("decision-plane", String.format(
+                            "J5 auto-passed non-CRITICAL approval: score=%.3f confidence=%.3f >= %.2f",
+                            answer.value(), answer.confidence(), decisionThresholds.approvalAuto()));
+                    approvalPort.save(request);
+                    return new ApprovalGate(Decision.APPROVED, request.getRequestId());
+                }
+                // 中/高风险或低置信 → 落 PENDING 人审（不自动放行）
+                approvalPort.save(request);
+                return new ApprovalGate(Decision.PENDING, request.getRequestId());
+            }
             ApprovalRequest request = ApprovalRequest.of(UUID.randomUUID().toString(), task.getTaskId(),
                     "workflow:" + task.getBizCode(), approvalToolId,
                     "Workflow stage approval: " + stage.getId());
@@ -233,6 +370,147 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
             return new ApprovalGate(Decision.DENIED, request.getRequestId());
         }
         return new ApprovalGate(Decision.PENDING, request.getRequestId());
+    }
+
+    /**
+     * J4（插入点 ①）：阶段产出后经决策闸门判定走向。
+     * <p>未配置闸门 / 决策平面缺失 / 判定异常 → {@link GateRoute#RUN_NEXT}（默认固定顺序，P10）；
+     * 低置信/答案缺失 → FAIL_CLOSED，消费侧同样回落默认顺序（P12③最保守分支＝原确定性序列）。
+     * 每次判定发 {@code decision_route_counts} 计数（DECISION 维度，经 H5）。</p>
+     */
+    private GateRoute evaluateStageGate(ExecutionTask task, WorkflowStage stage, String answer) {
+        if (decisionPort == null || !stage.hasDecisionGate()) {
+            return GateRoute.RUN_NEXT;
+        }
+        StageDecisionGate gate = stage.getDecisionGate();
+        String state = "工作流阶段: " + stage.getId()
+                + "\n阶段指令: " + stage.getInstruction()
+                + "\n阶段产出: " + truncate(answer, 2000);
+        DecisionAnswer decision = decideQuietly(state, gate.toQuestion());
+        GateRoute route = GateRoute.of(decision, gate.threshold());
+        emitRouteCount(route.name().toLowerCase(java.util.Locale.ROOT));
+        return route;
+    }
+
+    /** J4：恢复续跑时检查上一阶段闸门升级的人审单；DENIED/PENDING → 阻断（只收紧，P12②），其余 null。 */
+    private GateApprovalBlock findBlockingGateApproval(ExecutionTask task, String gateStageId) {
+        Optional<ApprovalRequest> request =
+                approvalPort.findLatest(task.getTaskId(), "workflow-gate:" + gateStageId);
+        if (request.isEmpty()) {
+            return null;
+        }
+        ApprovalStatus status = request.get().getStatus();
+        if (status == ApprovalStatus.PENDING) {
+            return new GateApprovalBlock(true, request.get().getRequestId());
+        }
+        if (status == ApprovalStatus.DENIED) {
+            return new GateApprovalBlock(false, request.get().getRequestId());
+        }
+        return null;
+    }
+
+    /**
+     * J6（插入点 ③）：产物验收闸门——{@code addArtifact} 前用 {@code score} 判完整/合规。
+     * <p>安全分与置信均 ≥ {@code artifact-accept}（0.80）→ 接受；否则<b>有界重试</b>该阶段
+     * （至多 {@value #MAX_ARTIFACT_RETRIES} 次，受终止闸门约束不无限重试）；重试仍不达标或重试失败 →
+     * 打标 {@code accepted=false} + 原因，<b>不阻断</b>工作流。决策平面缺失 → 原样接受（v2.0 行为，P10）。</p>
+     */
+    private Artifact reviewArtifact(ExecutionTask master, Agent agent, WorkflowStage stage, StageOutcome first) {
+        String name = stage.getArtifactName();
+        String type = stage.getArtifactType();
+        if (decisionPort == null) {
+            return Artifact.of(name, type, first.answer);
+        }
+        StageOutcome outcome = first;
+        for (int attempt = 0; ; attempt++) {
+            DecisionAnswer answer = decideQuietly(artifactState(stage, outcome.answer),
+                    DecisionQuestion.score("artifact-accept",
+                            "评估该阶段产物的完整性/合规性得分（0-1，越完整合规越高）"));
+            boolean accepted = answer != null
+                    && answer.confidence() >= decisionThresholds.artifactAccept()
+                    && answer.value() >= decisionThresholds.artifactAccept();
+            emitRouteCount(accepted ? "artifact_accept" : "artifact_reject");
+            if (accepted) {
+                return Artifact.reviewed(name, type, outcome.answer, true, String.format(
+                        "J6 accepted: score=%.3f confidence=%.3f >= %.2f",
+                        answer.value(), answer.confidence(), decisionThresholds.artifactAccept()));
+            }
+            if (attempt >= MAX_ARTIFACT_RETRIES || master.gateTripped()) {
+                return Artifact.reviewed(name, type, outcome.answer, false,
+                        answer == null
+                                ? "J6 rejected: no decision answer (fail-closed), threshold="
+                                        + decisionThresholds.artifactAccept()
+                                : String.format("J6 rejected: score=%.3f confidence=%.3f below threshold %.2f",
+                                        answer.value(), answer.confidence(), decisionThresholds.artifactAccept()));
+            }
+            publish(master, "progress", "artifact " + name + " below accept threshold, bounded retry "
+                    + (attempt + 1) + "/" + MAX_ARTIFACT_RETRIES);
+            StageOutcome retry = runStage(master, agent, stage);
+            master.addTokens(retry.tokens);
+            if (!retry.success) {
+                return Artifact.reviewed(name, type, outcome.answer, false,
+                        "J6 rejected: bounded retry failed - " + retry.reason);
+            }
+            outcome = retry;
+        }
+    }
+
+    /** 静默判定：异常/缺失一律返回 null（消费方走兜底，P10），绝不让决策平面异常中断工作流。 */
+    private DecisionAnswer decideQuietly(String state, DecisionQuestion question) {
+        if (decisionPort == null) {
+            return null;
+        }
+        try {
+            DecisionResponse response = decisionPort.decide(DecisionRequest.of(state, question));
+            return response == null ? null : response.answer(question.key());
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** 分流计数进 {@code decision_route_counts}（DECISION 维度，经 H5 → Micrometer 事件计数）。 */
+    private void emitRouteCount(String action) {
+        if (evaluationService == null) {
+            return;
+        }
+        try {
+            ExecutionMetrics metrics = ExecutionMetrics.of("decision-plane");
+            metrics.record(MetricDimension.DECISION, "decision_route_counts", action);
+            evaluationService.report(metrics);
+        } catch (RuntimeException ignored) {
+            // P10：埋点失败静默丢弃
+        }
+    }
+
+    private String approvalState(WorkflowStage stage, String goal) {
+        return "审批阶段: " + stage.getId()
+                + "\n阶段指令: " + stage.getInstruction()
+                + "\n任务目标: " + truncate(goal, 1000);
+    }
+
+    private String artifactState(WorkflowStage stage, String content) {
+        return "产物阶段: " + stage.getId()
+                + "\n产物名: " + stage.getArtifactName()
+                + "\n产物正文: " + truncate(content, 4000);
+    }
+
+    private static int indexOfStage(List<WorkflowStage> stages, String stageId) {
+        if (stageId == null || stageId.isBlank()) {
+            return -1;
+        }
+        for (int i = 0; i < stages.size(); i++) {
+            if (stageId.equals(stages.get(i).getId())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String truncate(String text, int max) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= max ? text : text.substring(0, max) + "...";
     }
 
     private void finalizeTask(ExecutionTask task, Agent agent, TaskState state, Plan plan,
@@ -415,6 +693,10 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
     }
 
     private record ApprovalGate(Decision decision, String requestId) {
+    }
+
+    /** J4：闸门升级人审单的阻断状态（pending=true 挂起 / false 拒绝）。 */
+    private record GateApprovalBlock(boolean pending, String requestId) {
     }
 
     /** 单阶段执行结果（内部值对象）。 */

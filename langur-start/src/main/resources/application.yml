@@ -167,6 +167,23 @@ langur:
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
   # 叠加“分步/规划/多步”等特征则升为 HYBRID（Workflow→PlanAndExecute→ReAct 三层）。
   # 阶段字段：id / instruction / requiresApproval(审批闸门，经 ApprovalPort 挂起-恢复) / artifactName+artifactType(产出具名产物，多产物输出)。
+  # J5：critical=true 的审批阶段为 CRITICAL 级——恒人审，决策平面绝不自动放行（P12②只收紧不放松）。
+  # J4：decision-gate 为阶段决策闸门（需 langur.decision.enabled=true 才生效，否则走默认固定顺序）：
+  #   - id: kb-retrieve
+  #     instruction: 检索知识库补充法规判例
+  #     decision-gate:
+  #       key: continue                 # 判定问题键（必填）
+  #       type: choice                  # choice（缺省）| noul
+  #       instructions: 已有产出是否足以支撑审查，下一阶段是否必要？
+  #       criteria:                     # CHOICE 选项 → 判据
+  #         run: 继续下一阶段
+  #         skip: 下一阶段不必要（跳过昂贵阶段）
+  #         branch-to-stage: 跳转专项阶段（配合 branch-to）
+  #         abort: 应当中断
+  #         require-approval: 升级人审
+  #       threshold: 0.75               # 置信阈值（缺省 routing 0.75；低置信 fail-closed 走默认顺序）
+  #       branch-to: special-review     # branch-to-stage 命中时的目标阶段 id
+  # J6：产物阶段自动经验收闸门（score ≥ artifact-accept 0.80 接受，否则一次有界重试后打标 accepted=false，不阻断）。
   workflow:
     definitions:
       # 示例：合同审查长任务——读取合同与尽调 → 知识库检索 → 合同审核 Skill → 特批项审批闸门 → 出具两份报告

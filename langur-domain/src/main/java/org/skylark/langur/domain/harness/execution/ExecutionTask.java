@@ -109,10 +109,15 @@ public class ExecutionTask {
 
     /** 追加一份具名产物（多产物输出）；同名产物允许并存，由消费方按 name/type 取用。 */
     public void addArtifact(String name, String type, String content) {
-        if (name == null || name.isBlank()) {
+        addArtifact(Artifact.of(name, type, content));
+    }
+
+    /** 追加一份已建模产物（J6：可携带验收结论 accepted/reviewNote）；name 为空静默忽略。 */
+    public void addArtifact(Artifact artifact) {
+        if (artifact == null || artifact.getName() == null || artifact.getName().isBlank()) {
             return;
         }
-        this.artifacts.add(Artifact.of(name, type, content));
+        this.artifacts.add(artifact);
         this.updatedAt = Instant.now();
     }
 
