@@ -223,3 +223,4 @@ N-G3                                                  [H13.7 + store 健康]  �
 | 日期 | 任务 | 说明 |
 |------|------|------|
 | 2026-09-25 | RoadMap 2.1 制定 | 依据 v2.1 架构设计，拆解为 N-G1/N-G2/N-G3 里程碑、H13（统一模型网关，7 子项）+ H14（可插拔向量库与原生混合检索，8 子项）、DD14–DD21、KPI 与风险登记；全部**待派发**；DD20（ES RRF 授权）设为 H14.5 前置门 |
+| 2026-09-25 | H13.1 完成 | 配置驱动 Provider 类型工厂落地：`ProviderProperties` 扩 `type/apiKeyRef/modelPrefixes`（`enabled` 改 `Boolean` 保留 openai matchIfMissing 语义）；新增 `ModelProviderFactory`（内置 6 家模板默认 + 按 type 实例化）、`ConfigurableOpenAICompatibleLLMAdapter`、`ModelPrefixes`；Claude/Gemini 改配置构造模板，删除 OpenAI/Qwen/DeepSeek 每厂硬编码类；start 新增 `ModelProviderConfiguration` 产出 `List<ModelRoutableLLMPort>` Bean。8 项工厂单测 + 既有回归全绿（227 测试）；打包启动冒烟 `/actuator/health` UP |
