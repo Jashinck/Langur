@@ -174,6 +174,12 @@ langur:
   #     enabled: false                                      #   分开关（缺省 false；与总开关 AND 后生效）
   #     prescreen-threshold: 0.85                           #   Jev 廉价初筛阈值：质量+置信双达阈则跳过 M5 省钱，否则升级 M5 反思改写
   #     critique-system-prompt: ""                          #   M5 自我批评提示词；留空用缺省中文反思提示词
+  #   distillation:                                         # R2 记忆自蒸馏（RSI L2，MemoryDistiller，轨迹→L4 知识）
+  #     enabled: false                                      #   分开关（缺省 false；与总开关 AND 后生效）
+  #     min-confidence: 0.85                                #   Jev 置信门：轨迹录制判定置信均值低于它则不入蒸馏（低置信轨迹不污染 L4）
+  #     dedup-threshold: 0.95                               #   语义去重阈值：目标命名空间近邻 cosine 达此值判重复拒绝
+  #     namespace: rsi-distilled                            #   蒸馏命名空间（与业务 knowledge 隔离）
+  #     llm-enabled: false                                  #   true=M5/M6 大模型归纳；false=确定性模板提炼（离线零网络）
   #   # 反思只在总开关+分开关均开时装配；order=5 先于 H10 内容审核(order=10)——改写后的答案仍被 H10 复查，反思不能绕过安全层（P11/P12）
   # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
