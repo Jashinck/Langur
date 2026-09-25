@@ -332,9 +332,11 @@ langur:
 
 启动时校验 `langur.vector.dimension` == `EmbeddingPort.dimensions()`（lexical=256 / llm=1536）；不一致 → **fail-fast** 明确报错（或按 embedding 维度自动建索引/collection）。ES `dense_vector.dims`、Milvus `FLOAT_VECTOR.dim`、pgvector `vector(n)` 均由该维度驱动，杜绝硬编码 256 与 llm 1536 冲突导致的静默召回损坏。
 
-### 3.8 pgvector 数据源修复（补 B4）
+### 3.8 pgvector 数据源修复（补 B4）✅ 已落地（H14.7，2026-09-25）
 
 `store=pgvector` 时，start 按 `langur.vector.pgvector.*` 条件装配独立 `DataSource` + `vectorJdbcTemplate` Bean（当前缺失 → 装配失败）；`PgVectorStore` 同步实现新端口方法（delete/batch/filter/hybrid 视能力，pgvector 可 `supportsHybrid()=false` 走应用侧，或用 SQL 全文 `ts_rank` + 向量做 DB 侧融合，列为后续可选）。
+
+> **落地说明**：`PgVectorDataSourceConfiguration` 刻意不暴露 `DataSource` 类型 Bean（避免 Boot `DataSourceAutoConfiguration` 的 `@ConditionalOnMissingBean` 退避顶掉业务库），内部构建 Hikari 池并经 `DisposableBean` 托管生命周期；启动即取连接 fail-fast——不可达时明确报错退出，绝不静默、绝不落回内存。`password-ref` 经 `SecretResolver`（fail-closed）。`PgVectorStore` 补齐 delete/JDBC batch/`search(SearchQuery)`（候选放大 + 谓词/minScore 后过滤，语义同内存实现）；`supportsHybrid()=false` 走应用侧兜底；postgresql 驱动加入 start（runtime）。SQL 全文 `ts_rank` DB 侧融合列为后续可选（未实施）。
 
 ### 3.9 DDD 落点
 
@@ -421,7 +423,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20 已核实关闭：缺省客户端融合）（进度：H14.1/H14.2/H14.3/H14.4/H14.5/H14.6/H14.8 ✅ 2026-09-25，余 H14.7） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | **G2 达成**：H14.1–H14.8 ✅ 2026-09-25（DD20 已核实：ES RRF retriever 属付费层，缺省客户端融合；DD15/DD16 偏差：REST/WebClient 直连替代官方 SDK，详见 RoadMap 2.1 §10） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---
