@@ -122,7 +122,7 @@ ProviderProperties {
 
 > **注册范式转变**：从"一家一个 `@ConditionalOnProperty` `@Component`"→"一个工厂读配置动态建 Bean"。`LLMRouter` 的构造注入（`List<ModelRoutableLLMPort>`）不变，只是列表来源由工厂产出。既有 5 家适配器逻辑**全部复用**，仅注册方式改为配置驱动 + 内置 `openai` 默认（matchIfMissing 语义保留）。
 
-#### ② GLM/智谱补齐（零代码验证工厂）
+#### ② GLM/智谱补齐（零代码验证工厂）✅ 已落地（H13.2，2026-09-25）
 
 ```yaml
 glm:
@@ -134,7 +134,7 @@ glm:
   api-key-ref: env:GLM_API_KEY
 ```
 
-#### ③ 可配置 model-prefixes
+#### ③ 可配置 model-prefixes ✅ 已落地（H13.3，2026-09-25）
 
 `ModelRoutableLLMPort.supportsModel(model)` 改为匹配 `modelPrefixes` 任一前缀；未配置前缀时回退按 `provider.model` 精确/前缀匹配。`LLMRouter.route` 逻辑不变。
 
@@ -414,7 +414,7 @@ langur:
 | 级别 | 能力 | 依赖 | 风险 |
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
-| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（进度：H13.1/H13.4/H13.6 ✅ 2026-09-25） |
+| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（进度：H13.1/H13.2/H13.3/H13.4/H13.6 ✅ 2026-09-25，余 H13.5） |
 | **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
