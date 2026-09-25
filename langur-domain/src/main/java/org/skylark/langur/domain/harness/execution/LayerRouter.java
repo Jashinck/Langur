@@ -18,6 +18,7 @@ public interface LayerRouter {
             case WORKFLOW_LAYER -> RuntimeParadigm.WORKFLOW;
             case PLAN_LAYER -> RuntimeParadigm.PLAN_AND_EXECUTE;
             case REACT_LAYER -> RuntimeParadigm.REACT;
+            case HYBRID_LAYER -> RuntimeParadigm.HYBRID;
         };
     }
 }

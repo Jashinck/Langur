@@ -20,6 +20,8 @@ public class RestApiToolSpec {
     private final String operationId;
     private final String method;
     private final String urlTemplate;
+    /** 工具描述（OpenAPI summary/description，或手动配置）；为空时回退通用描述。 */
+    private final String description;
     /** 静态请求头（凭证头由 CredentialVault 追加）。 */
     private final Map<String, String> headers;
     /** 凭证引用，对应 CredentialVault 中的条目；为空表示匿名调用。 */

@@ -1,5 +1,6 @@
 package org.skylark.langur.infrastructure.harness.tool.mcp.jsonrpc;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -8,6 +9,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record JsonRpcResponse(String jsonrpc, String id, Object result, JsonRpcError error) {
 
+    /** 派生判定，非可序列化属性——否则会与 record 组件 {@code error} 冲突（被当作 boolean 属性）。 */
+    @JsonIgnore
     public boolean isError() {
         return error != null;
     }

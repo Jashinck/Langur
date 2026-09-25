@@ -25,6 +25,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!-- H4：Redis L2 热层 + 分布式锁 + 限流/幂等持久化（cache.type=redis 时装配，缺省 memory 不启用） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
@@ -36,6 +41,11 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <!-- H5：四维指标 → Micrometer（Prometheus 导出由 start 层 actuator + registry 承载） -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
         </dependency>
         <dependency>
             <groupId>com.mysql</groupId>

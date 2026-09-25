@@ -34,4 +34,9 @@ public class InMemoryToolRegistry implements ToolRegistry {
                 .filter(definition -> definition.isInvokableBy(caller))
                 .toList();
     }
+
+    @Override
+    public void unregister(String toolId) {
+        store.remove(toolId);
+    }
 }

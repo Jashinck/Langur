@@ -23,9 +23,11 @@ import org.skylark.langur.domain.harness.state.TaskStateStatus;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
+import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.domain.service.AgentDomainService;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -87,6 +89,8 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         long startMillis = System.currentTimeMillis();
         int toolCalls = 0;
         int interceptions = 0;
+        int realTokenRounds = 0;
+        int estimatedTokenRounds = 0;
         task.start();
 
         // [S] 断点续跑 + 并发重入保护（T5）：优先复用既有任务状态并获取执行锁
@@ -122,15 +126,15 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         }
         fire(HookPoint.AFTER_CONTEXT_ASSEMBLE, task, agent.getConversationHistory().size() + " messages");
 
-        // [E] 闸门 Token 维度：初始上下文计入消耗（字符数估算，接入真实 usage 后替换）
+        // [E] 闸门 Token 维度：初始上下文尚无 LLM 调用，按字符数估算计入消耗（H1：后续每轮优先用真实 usage）
         task.addTokens(estimateTokens(agent));
 
         String finalAnswer = null;
         boolean loopDetected = false;
         try {
             while (finalAnswer == null && !agent.hasExceededMaxIterations() && !task.gateTripped()) {
-                // [L] 推理前置拦截：安全策略可在此中断/改写
-                if (abortIfRejected(HookPoint.BEFORE_INFERENCE, task, agent.getConfig().getSystemPrompt())) {
+                // [L] 推理前置拦截：安全策略可在此中断/改写（H10：载荷为最新用户输入，供注入检测扫描）
+                if (abortIfRejected(HookPoint.BEFORE_INFERENCE, task, inferencePayload(agent))) {
                     interceptions++;
                     auditInterception(task, "INFERENCE_REJECTED", "before_inference aborted");
                     break;
@@ -150,10 +154,17 @@ public class ReActExecutionLoop implements ExecutionLoopService {
                         throw e;
                     }
                 }
-                // [E] 闸门 Token 维度：本轮新增上下文计入消耗
-                long tokensAfter = estimateTokens(agent);
-                if (tokensAfter > tokensBefore) {
-                    task.addTokens(tokensAfter - tokensBefore);
+                // [E] 闸门 Token 维度（H1）：优先用 LLM 回传的真实 usage，缺失时降级字符估算并标注来源
+                LLMPort.TokenUsage usage = agent.consumeLastRoundUsage();
+                if (usage != null && !usage.isEmpty()) {
+                    task.addTokens(usage.getTotalTokens());
+                    realTokenRounds++;
+                } else {
+                    long tokensAfter = estimateTokens(agent);
+                    if (tokensAfter > tokensBefore) {
+                        task.addTokens(tokensAfter - tokensBefore);
+                        estimatedTokenRounds++;
+                    }
                 }
                 // [E] 闸门单轮调用数维度：本轮产出工具调用则计数（未产出即给出最终答案）
                 if (finalAnswer == null) {
@@ -232,7 +243,7 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         taskStateRepository.save(state);
 
         // [V] 四维指标上报（失败静默降级，不影响主链路）
-        reportMetrics(task, startMillis, toolCalls, interceptions);
+        reportMetrics(task, startMillis, toolCalls, interceptions, realTokenRounds, estimatedTokenRounds);
         return task;
     }
 
@@ -266,6 +277,21 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         }
         PlanStep last = plan.getSteps().get(plan.getSteps().size() - 1);
         return loopDetector.recordAndDetect(last.getAction(), last.getObservation());
+    }
+
+    /**
+     * [L] BEFORE_INFERENCE 载荷（H10）：取最新一条 user 消息供注入检测扫描，
+     * 无用户消息时降级为系统提示词。
+     */
+    private String inferencePayload(Agent agent) {
+        List<Map<String, String>> history = agent.getConversationHistory();
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Map<String, String> message = history.get(i);
+            if ("user".equalsIgnoreCase(message.get("role"))) {
+                return message.get("content");
+            }
+        }
+        return agent.getConfig().getSystemPrompt();
     }
 
     private int readIteration(StateSnapshot snapshot) {
@@ -326,7 +352,8 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         return payload;
     }
 
-    private void reportMetrics(ExecutionTask task, long startMillis, int toolCalls, int interceptions) {
+    private void reportMetrics(ExecutionTask task, long startMillis, int toolCalls, int interceptions,
+                               int realTokenRounds, int estimatedTokenRounds) {
         if (evaluationService == null) {
             return;
         }
@@ -340,6 +367,9 @@ public class ReActExecutionLoop implements ExecutionLoopService {
             metrics.record(MetricDimension.SCHEDULING, "elapsedMillis", System.currentTimeMillis() - startMillis);
             // 模型层
             metrics.record(MetricDimension.MODEL, "consumedTokens", task.getConsumedTokens());
+            // 模型层（H1）：Token 计量来源，real=provider usage，estimated=字符估算兜底
+            metrics.record(MetricDimension.MODEL, "realTokenRounds", realTokenRounds);
+            metrics.record(MetricDimension.MODEL, "estimatedTokenRounds", estimatedTokenRounds);
             // 工具层
             metrics.record(MetricDimension.TOOL, "toolCalls", toolCalls);
             // 安全层

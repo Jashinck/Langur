@@ -70,7 +70,7 @@ class AgentApplicationServiceTest {
         agentDomainService.attachHookEngine(hookEngine);
         ExecutionLoopService executionLoopService = new ReActExecutionLoop(
                 agentDomainService, hookEngine,
-                new InMemoryTaskStateRepository(), new LoggingEvaluationService());
+                new InMemoryTaskStateRepository(), new LoggingEvaluationService(null, List.of()));
         agentApplicationService = new AgentApplicationService(
                 agentRepository, agentDomainService, planningDomainService,
                 toolRegistryService, assembler, planRepository, executionLoopService,

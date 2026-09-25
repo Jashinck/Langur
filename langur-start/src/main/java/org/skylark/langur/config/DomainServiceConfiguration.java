@@ -2,6 +2,7 @@ package org.skylark.langur.config;
 
 import org.skylark.langur.domain.harness.execution.DefaultLayerRouter;
 import org.skylark.langur.domain.harness.execution.LayerRouter;
+import org.skylark.langur.domain.harness.workflow.WorkflowRepository;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.domain.service.PlanningDomainService;
@@ -27,7 +28,7 @@ public class DomainServiceConfiguration {
     }
 
     @Bean
-    public LayerRouter layerRouter() {
-        return new DefaultLayerRouter();
+    public LayerRouter layerRouter(WorkflowRepository workflowRepository) {
+        return new DefaultLayerRouter(workflowRepository);
     }
 }

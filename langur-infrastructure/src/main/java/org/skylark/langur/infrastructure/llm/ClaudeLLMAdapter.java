@@ -108,17 +108,34 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
 
     @SuppressWarnings("unchecked")
     private LLMDecision parseDecision(String responseJson) throws Exception {
-        JsonNode content = objectMapper.readTree(responseJson).path("content");
+        JsonNode root = objectMapper.readTree(responseJson);
+        JsonNode content = root.path("content");
+        LLMPort.TokenUsage usage = parseUsage(root);
         String thought = extractText(responseJson);
         for (JsonNode node : content) {
             if ("tool_use".equals(node.path("type").asText())) {
                 return LLMDecision.toolCall(
                         StringUtils.defaultIfBlank(thought, "Calling tool: " + node.path("name").asText()),
                         node.path("name").asText(),
-                        objectMapper.convertValue(node.path("input"), Map.class));
+                        objectMapper.convertValue(node.path("input"), Map.class),
+                        usage);
             }
         }
-        return LLMDecision.finalAnswer(thought);
+        return LLMDecision.finalAnswer(thought, usage);
+    }
+
+    /**
+     * 解析 Anthropic usage（H1）：input_tokens / output_tokens；缺失或全零返回 null。
+     */
+    private LLMPort.TokenUsage parseUsage(JsonNode root) {
+        JsonNode usage = root.path("usage");
+        if (usage.isMissingNode() || usage.isNull()) {
+            return null;
+        }
+        long prompt = usage.path("input_tokens").asLong(0);
+        long completion = usage.path("output_tokens").asLong(0);
+        long total = prompt + completion;
+        return total <= 0 ? null : LLMPort.TokenUsage.of(prompt, completion, total);
     }
 
     private String extractText(String responseJson) throws Exception {
