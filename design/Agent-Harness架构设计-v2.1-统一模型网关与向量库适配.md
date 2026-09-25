@@ -273,14 +273,16 @@ recall(ns, query, topK, budget):
 - **命名空间映射（DD18）**：单索引 + `namespace` keyword 字段过滤（默认，运维简单）vs 每命名空间一索引（隔离强）。✅ 采用单索引 + `namespace` 强制过滤，`_id = namespace::id` 幂等 UPSERT。
 - **凭证**：`username` + `password-ref`（经 `SecretResolver`）；`uris` 经 `SsrfGuard` 校验（自部署内网走白名单）；建议 TLS。✅ 已落地：解析为空/无 resolver 均 fail-closed；明文仅注入 Basic 认证头，不落日志/异常/请求体。
 
-### 3.4 `MilvusVectorStore`（`store=milvus`）
+### 3.4 `MilvusVectorStore`（`store=milvus`）✅ 已落地（H14.6，2026-09-25）
 
-- **Collection schema**：`id`(PK) / `namespace`(varchar，**partition-key** 高效过滤) / `content`(varchar) / `embedding`(`FLOAT_VECTOR`，HNSW 或 IVF_FLAT，metric=COSINE/IP) / `sparse`(`SPARSE_FLOAT_VECTOR`)。
-- **稀疏向量来源**：Milvus 2.5+ 内置 **`BM25` function**（insert 时由 `content` 文本自动生成稀疏向量）→ 原生全文 + 混合；或外接稀疏 Embedding（BGE-M3/SPLADE）。
+- **Collection schema**：`id`(PK) / `namespace`(varchar，**partition-key** 高效过滤) / `content`(varchar) / `embedding`(`FLOAT_VECTOR`，HNSW 或 IVF_FLAT，metric=COSINE/IP) / `sparse`(`SPARSE_FLOAT_VECTOR`)。✅ 首写 best-effort 自建（含索引参数），已存在则忽略交由预置 schema。
+- **稀疏向量来源**：Milvus 2.5+ 内置 **`BM25` function**（insert 时由 `content` 文本自动生成稀疏向量）→ 原生全文 + 混合；或外接稀疏 Embedding（BGE-M3/SPLADE）。✅ 采用 BM25 function（schema 内声明），sparse 通道检索直传查询文本。
 - **原生混合**：`hybrid_search` 传两个 `AnnSearchRequest`（dense + sparse）+ **`RRFRanker`** 或 `WeightedRanker`——服务端融合（下推）。
+  - ⚠️ **落地偏差**：RESTful v2 未暴露服务端 `hybrid_search`（Ranker 下推属 SDK 能力）→ 实际为 dense + sparse 两通道 `entities/search` + **客户端融合**（`ClientSideFusion` 纯函数，与 ES DD20 缺省路径同构，RRF/WEIGHTED）；sparse 通道不可用 → 异常上抛由 domain 回退应用侧 `EmbeddingRerankPort`（P10）。
 - **客户端（DD16）**：官方 `io.milvus:milvus-sdk-java`（v2 SDK）。
-- **命名空间映射（DD18）**：`namespace` 作 partition-key（默认）vs 每命名空间一 collection。
-- **凭证**：`uri` + `username`/`password-ref`（经 `SecretResolver`）；`SsrfGuard` 校验；建议 TLS。
+  - ⚠️ **落地偏差**：以 **WebClient REST（RESTful v2）直连**替代官方 SDK——pom 无该依赖，重依赖易冲突且难离线确定性单测（验收硬约束）；详见 RoadMap 2.1 §10。
+- **命名空间映射（DD18）**：`namespace` 作 partition-key（默认）vs 每命名空间一 collection。✅ 采用 partition-key + 布尔表达式强制过滤。
+- **凭证**：`uri` + `username`/`password-ref`（经 `SecretResolver`）；`SsrfGuard` 校验；建议 TLS。✅ 已落地：解析为空/无 resolver fail-closed；明文仅注入 `Bearer` 认证头。
 
 ### 3.5 `VectorProperties` 配置类（`langur.vector.*`，补 B5）✅ 已落地（H14.4，2026-09-25）
 
@@ -323,6 +325,8 @@ langur:
 | 二次精排（可选） | 原生 hybrid 取 top-N 后再过 `EmbeddingRerankPort` | 两级检索，精度可选增强 |
 
 > **融合算法（DD17）**：默认 **RRF**（Reciprocal Rank Fusion，基于排名、免分数归一化、跨检索器稳健）；`weighted` 需先归一化 BM25 与 cosine 分数（尺度不同，需谨慎）。
+>
+> **落地状态（H14.5/H14.6，2026-09-25）**：ES 缺省（`native-rrf=false`，DD20 已核实 RRF retriever 属付费层）与 Milvus（RESTful v2 无服务端 Ranker 下推）均走 **store 级两通道 + 客户端融合**（共用 `ClientSideFusion` 纯函数）；ES 原生 `retriever.rrf` 仅在授权环境显式开启，失败自动降级。对 domain 而言两 store 均 `supportsHybrid()=true`，`hybrid.mode=native` 语义不变。
 
 ### 3.7 维度一致性守卫（补 B6）✅ 已落地（H14.8，2026-09-25）
 
@@ -417,7 +421,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20 已核实关闭：缺省客户端融合）（进度：H14.1/H14.2/H14.3/H14.4/H14.5/H14.8 ✅ 2026-09-25） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20 已核实关闭：缺省客户端融合）（进度：H14.1/H14.2/H14.3/H14.4/H14.5/H14.6/H14.8 ✅ 2026-09-25，余 H14.7） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---
