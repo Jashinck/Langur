@@ -170,6 +170,11 @@ langur:
   # 生效须经 R-G 灰度 + 高危人审（R3/R4/R5 落地后接入）。关闭时不产任何 RSI Bean，行为与既有版本一致。
   # rsi:
   #   enabled: false                                        # 总开关（缺省 false，RSI 暂停）
+  #   reflection:                                           # R1 反思自检（RSI L1，ReflectionHook，BEFORE_OUTPUT 改写型钩子）
+  #     enabled: false                                      #   分开关（缺省 false；与总开关 AND 后生效）
+  #     prescreen-threshold: 0.85                           #   Jev 廉价初筛阈值：质量+置信双达阈则跳过 M5 省钱，否则升级 M5 反思改写
+  #     critique-system-prompt: ""                          #   M5 自我批评提示词；留空用缺省中文反思提示词
+  #   # 反思只在总开关+分开关均开时装配；order=5 先于 H10 内容审核(order=10)——改写后的答案仍被 H10 复查，反思不能绕过安全层（P11/P12）
   # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
   # 叠加“分步/规划/多步”等特征则升为 HYBRID（Workflow→PlanAndExecute→ReAct 三层）。
