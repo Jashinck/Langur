@@ -5,6 +5,8 @@ import org.skylark.langur.common.cache.DistributedLock;
 import org.skylark.langur.domain.harness.context.AgentContextRepository;
 import org.skylark.langur.domain.harness.context.ContextAssembler;
 import org.skylark.langur.domain.harness.context.vector.EmbeddingPort;
+import org.skylark.langur.domain.harness.context.vector.FusionMode;
+import org.skylark.langur.domain.harness.context.vector.HybridSearchOptions;
 import org.skylark.langur.domain.harness.context.vector.RerankPort;
 import org.skylark.langur.domain.harness.context.vector.VectorMemoryService;
 import org.skylark.langur.domain.harness.context.vector.VectorStore;
@@ -31,6 +33,7 @@ import org.skylark.langur.domain.harness.workflow.WorkflowRepository;
 import org.skylark.langur.domain.port.DefaultFallbackStrategy;
 import org.skylark.langur.domain.service.AgentDomainService;
 import org.skylark.langur.infrastructure.cache.CacheProperties;
+import org.skylark.langur.infrastructure.harness.context.vector.VectorProperties;
 import org.skylark.langur.infrastructure.harness.execution.LlmPlanner;
 import org.skylark.langur.infrastructure.harness.execution.LockingExecutionLoopService;
 import org.skylark.langur.infrastructure.harness.workflow.WorkflowDefinitionRegistrar;
@@ -203,13 +206,28 @@ public class HarnessConfiguration {
     }
 
     /**
-     * C 组件 L4 - 向量记忆服务（T14 + H2）：嵌入端口 + 向量存储（默认内存实现，可切换 pgvector）
-     * + 可选重排端口（{@code langur.rerank.enabled=true} 时装配 M3 重排去噪）。
+     * C 组件 L4 - 向量记忆服务（T14 + H2 + H14.3）：嵌入端口 + 向量存储（默认内存实现，可切换 pgvector/ES/Milvus）
+     * + 可选重排端口（{@code langur.rerank.enabled=true} 时装配 M3 重排去噪）
+     * + 混合检索策略（{@code langur.vector.hybrid.*} → {@link HybridSearchOptions}；缺省 disabled，既有路径不变）。
      */
     @Bean
     public VectorMemoryService vectorMemoryService(EmbeddingPort embeddingPort,
                                                    VectorStore vectorStore,
-                                                   ObjectProvider<RerankPort> rerankPortProvider) {
-        return new VectorMemoryService(embeddingPort, vectorStore, rerankPortProvider.getIfAvailable());
+                                                   ObjectProvider<RerankPort> rerankPortProvider,
+                                                   VectorProperties vectorProperties) {
+        return new VectorMemoryService(embeddingPort, vectorStore, rerankPortProvider.getIfAvailable(),
+                toHybridOptions(vectorProperties.getHybrid()));
+    }
+
+    /** 将 {@code langur.vector.hybrid.*} 映射为 domain 纯值对象 {@link HybridSearchOptions}（P1 依赖倒置）。 */
+    private static HybridSearchOptions toHybridOptions(VectorProperties.Hybrid hybrid) {
+        if (hybrid == null || !hybrid.isEnabled()) {
+            return HybridSearchOptions.disabled();
+        }
+        HybridSearchOptions.Mode mode = "app".equalsIgnoreCase(hybrid.getMode())
+                ? HybridSearchOptions.Mode.APP : HybridSearchOptions.Mode.NATIVE;
+        FusionMode fusion = "weighted".equalsIgnoreCase(hybrid.getFusion())
+                ? FusionMode.WEIGHTED : FusionMode.RRF;
+        return HybridSearchOptions.of(true, mode, fusion, hybrid.getRrfK(), hybrid.getLexicalWeight());
     }
 }

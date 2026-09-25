@@ -246,7 +246,7 @@ SearchFilter { List<Predicate> predicates; }   // metadata 过滤：EQ / IN / GT
 FusionMode   { RRF, WEIGHTED }                 // 融合算法（默认 RRF：基于排名、免分数归一化）
 ```
 
-### 3.2 `VectorMemoryService.recall` 增强（domain）
+### 3.2 `VectorMemoryService.recall` 增强（domain）✅ 已落地（H14.3，2026-09-25）
 
 ```
 recall(ns, query, topK, budget):
@@ -280,7 +280,7 @@ recall(ns, query, topK, budget):
 - **命名空间映射（DD18）**：`namespace` 作 partition-key（默认）vs 每命名空间一 collection。
 - **凭证**：`uri` + `username`/`password-ref`（经 `SecretResolver`）；`SsrfGuard` 校验；建议 TLS。
 
-### 3.5 `VectorProperties` 配置类（`langur.vector.*`，补 B5）
+### 3.5 `VectorProperties` 配置类（`langur.vector.*`，补 B5）✅ 已落地（H14.4，2026-09-25）
 
 ```yaml
 langur:
@@ -415,7 +415,7 @@ langur:
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
 | **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
-| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2 ✅ 2026-09-25） |
+| **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20）（进度：H14.1/H14.2/H14.3/H14.4 ✅ 2026-09-25） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
 ---
