@@ -72,7 +72,9 @@ v2.0 落地后，系统里所有"判定"动作都落在三类不理想的实现�
 
 ## 2. 决策平面（Decision Plane）核心设计
 
-### 2.1 契约（domain，零外部依赖 P1）
+### 2.1 契约（domain，零外部依赖 P1）✅ 已落地（J1，2026-09-25）
+
+> **落地说明（J1）**：`port/DecisionPort` + `harness/decision/{DecisionRequest, DecisionQuestion, DecisionType(CHOICE→choice / PROBABILITY→noul / SCORE→score), DecisionResponse, DecisionAnswer, DecisionThresholds(DD11 缺省 0.75/0.90/0.80/0.85)}` 均为纯 JDK record/enum（已断言无 Spring/Jackson import）；`DecisionResponse.usage` 复用 H1 `LLMPort.TokenUsage`。infra `TypeSafeDecisionAdapter`（WebClient REST、批量投机扇出 state 只发一次、后端异常/超时委派兜底不抛出）+ `RuleFallbackDecisionAdapter`（复用 H10 `OutputContentReviewer`，confidence 恒 0 → fail-closed）已落地；适配器不带 `@Component`，由 J3 `DecisionConfiguration` 条件装配。
 
 新增 domain 端口 `DecisionPort`，与 `LLMPort`/`RerankPort` 同构；值对象纯 JDK：
 
@@ -352,6 +354,8 @@ langur:
 |------|------|------|------|------|
 | **D0** | 规则判定（现状） | 正则/字符串/固定规则 + 昂贵 M5 判定 | — | 低（但脆弱/贵） |
 | **D1** | Jev advisory | `DecisionPort` 接入，仅非安全闸门做**建议** + 规则兜底，默认关、可录制 | J1–J3 | 低 |
+
+> **D1 进度（2026-09-25）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2（录制 + 决策指标）、J3（装配 + 阈值路由 + 缓存 + local 后端 + 数据驻留）待落地，二者完成后达 D1。
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
 
