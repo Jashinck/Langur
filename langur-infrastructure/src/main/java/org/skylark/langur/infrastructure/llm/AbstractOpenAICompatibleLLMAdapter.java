@@ -102,6 +102,15 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
 
     @Override
     public String complete(String systemPrompt, String model, String userMessage) {
+        return completeWithUsage(systemPrompt, model, userMessage).getContent();
+    }
+
+    /**
+     * 补全并回传真实 usage（H13.5，复用 H1 {@link #parseUsage}）：provider 未回传 usage 时
+     * 返回空计量，由调用方按 H1 语义降级估算。
+     */
+    @Override
+    public LLMPort.CompletionResult completeWithUsage(String systemPrompt, String model, String userMessage) {
         try {
             ObjectNode requestBody = objectMapper.createObjectNode();
             requestBody.put("model", resolveModel(model));
@@ -119,7 +128,9 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
                     .block();
 
             JsonNode root = objectMapper.readTree(response);
-            return root.at("/choices/0/message/content").asText();
+            String content = root.at("/choices/0/message/content").asText();
+            LLMPort.TokenUsage usage = parseUsage(root);
+            return new LLMPort.CompletionResult(content, usage != null ? usage : LLMPort.TokenUsage.empty());
         } catch (Exception e) {
             throw providerException("complete", e);
         }

@@ -18,6 +18,14 @@ public interface LLMPort {
     String complete(String systemPrompt, String model, String userMessage);
 
     /**
+     * 补全并回传真实 Token 计量（H13.5）：默认委派 {@link #complete}，usage 为空计量，
+     * 由调用方按 H1 语义降级为字符估算；OpenAI 兼容适配器覆写解析响应 usage 字段。
+     */
+    default CompletionResult completeWithUsage(String systemPrompt, String model, String userMessage) {
+        return new CompletionResult(complete(systemPrompt, model, userMessage), TokenUsage.empty());
+    }
+
+    /**
      * 流式补全（T8）：逐块回调 token，供 SSE 双入口消费。
      * <p>默认降级为非流式一次性产出；OpenAI 兼容适配器覆写为真实 stream=true SSE 流。</p>
      */
@@ -48,6 +56,11 @@ public interface LLMPort {
 
         public static TokenUsage of(long promptTokens, long completionTokens) {
             return new TokenUsage(promptTokens, completionTokens, promptTokens + completionTokens);
+        }
+
+        /** 空计量（H13.5）：{@link #isEmpty()} 为真，语义与 null 等同，供默认实现返回。 */
+        public static TokenUsage empty() {
+            return new TokenUsage(0, 0, 0);
         }
 
         public static TokenUsage of(long promptTokens, long completionTokens, long totalTokens) {
@@ -103,6 +116,23 @@ public interface LLMPort {
         public Map<String, Object> getToolArguments() { return toolArguments; }
         public String getFinalAnswer() { return answer; }
         /** 本轮真实 Token 计量；provider 未回传时为 {@code null}（H1）。 */
+        public TokenUsage getUsage() { return usage; }
+    }
+
+    /**
+     * 补全结果值对象（H13.5）：content + 真实 Token 计量，纯 JDK 零外部依赖。
+     * <p>{@link #getUsage()} 为空计量（{@link TokenUsage#isEmpty()}）时，调用方按 H1 语义降级估算。</p>
+     */
+    final class CompletionResult {
+        private final String content;
+        private final TokenUsage usage;
+
+        public CompletionResult(String content, TokenUsage usage) {
+            this.content = content;
+            this.usage = usage != null ? usage : TokenUsage.empty();
+        }
+
+        public String getContent() { return content; }
         public TokenUsage getUsage() { return usage; }
     }
 }

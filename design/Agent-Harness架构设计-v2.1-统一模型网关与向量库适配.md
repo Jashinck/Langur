@@ -144,7 +144,7 @@ glm:
 - `LlmGateway.withFallback` 捕获 `ModelProviderException` → 试链中下一个；链耗尽 → 抛 `IllegalStateException`（现状语义保留）。
 - **边界**：模型正常返回的"内容里含 error 文本"**不算失败**（只有传输层/非 2xx/反序列化异常才 throw），避免误降级。
 
-#### ⑤ `complete()` 回传 usage
+#### ⑤ `complete()` 回传 usage ✅ 已落地（H13.5，2026-09-25）
 
 domain `LLMPort` 增量（default 方法，向后兼容）：
 
@@ -414,7 +414,7 @@ langur:
 | 级别 | 能力 | 依赖 | 风险 |
 |------|------|------|------|
 | **G0** | 现状：固定 vendor Bean、memory/pgvector、应用侧混合 | — | 低（但扩厂改码、混合不下推） |
-| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（进度：H13.1/H13.2/H13.3/H13.4/H13.6 ✅ 2026-09-25，余 H13.5） |
+| **G1** | **网关统一**：配置工厂 + GLM + 前缀配置化 + 错误传播/fallback 修复 + usage + SecretResolver | H13.1–H13.6 | 低（**G1 达成**：H13.1–H13.6 ✅ 2026-09-25） |
 | **G2** | **向量库可插拔**：端口扩展 + ES + Milvus + 原生混合下推 + VectorProperties + pgvector 修复 + 维度守卫 | H14.1–H14.8 | 中（ES RRF 授权 DD20） |
 | **G3** | **弹性**：provider/store 熔断 + 健康探测 + 自动故障转移 + 检索缓存 | H13.7 / G2 | 中 |
 
