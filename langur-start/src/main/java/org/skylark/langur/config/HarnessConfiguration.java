@@ -171,9 +171,12 @@ public class HarnessConfiguration {
     /**
      * E 组件分层混合循环 - Hybrid（{@link RuntimeParadigm#HYBRID}，H9）：顶层 Workflow 锁合规边界 →
      * 每阶段委派中层 {@link PlanAndExecuteExecutionLoop} 拆解 → 底层 ReAct 执行，三层分权贯通。
+     * <p>J7④：额外装配每阶段执行器池 {REACT, PLAN_AND_EXECUTE}，决策平面开启时按 {@code choice} 为每阶段
+     * 择优"够用的最便宜执行器"（简单→ReAct，复杂→Plan）；决策平面关闭时不择优，固定走中层 Plan（v2.0 行为）。</p>
      */
     @Bean
-    public WorkflowExecutionLoop hybridExecutionLoop(PlanAndExecuteExecutionLoop planAndExecuteExecutionLoop,
+    public WorkflowExecutionLoop hybridExecutionLoop(ReActExecutionLoop reActExecutionLoop,
+                                                     PlanAndExecuteExecutionLoop planAndExecuteExecutionLoop,
                                                      WorkflowRepository workflowRepository,
                                                      ObjectProvider<ApprovalPort> approvalPortProvider,
                                                      TaskStateRepository taskStateRepository,
@@ -186,6 +189,10 @@ public class HarnessConfiguration {
                 RuntimeParadigm.PLAN_AND_EXECUTE, workflowRepository, approvalPortProvider.getIfAvailable(),
                 taskStateRepository, evaluationService, hookEngine);
         loop.attachProgressPort(progressPort);
+        Map<RuntimeParadigm, ExecutionLoopService> stageExecutors = new EnumMap<>(RuntimeParadigm.class);
+        stageExecutors.put(RuntimeParadigm.REACT, reActExecutionLoop);
+        stageExecutors.put(RuntimeParadigm.PLAN_AND_EXECUTE, planAndExecuteExecutionLoop);
+        loop.attachStageExecutors(stageExecutors);
         attachDecisionPlane(loop, decisionPortProvider, decisionPropertiesProvider);
         return loop;
     }

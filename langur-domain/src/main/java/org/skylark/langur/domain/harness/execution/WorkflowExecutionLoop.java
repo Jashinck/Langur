@@ -5,6 +5,7 @@ import org.skylark.langur.domain.harness.decision.DecisionQuestion;
 import org.skylark.langur.domain.harness.decision.DecisionRequest;
 import org.skylark.langur.domain.harness.decision.DecisionResponse;
 import org.skylark.langur.domain.harness.decision.DecisionThresholds;
+import org.skylark.langur.domain.harness.decision.DecisionType;
 import org.skylark.langur.domain.harness.evaluation.EvaluationService;
 import org.skylark.langur.domain.harness.evaluation.ExecutionMetrics;
 import org.skylark.langur.domain.harness.evaluation.MetricDimension;
@@ -33,6 +34,7 @@ import org.skylark.langur.domain.model.plan.StepStatus;
 import org.skylark.langur.domain.port.DecisionPort;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -77,6 +79,14 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
     /** 各插入点置信阈值（J5 审批自动放行 / J6 产物验收）；缺省 DD11 经验值。 */
     private DecisionThresholds decisionThresholds = DecisionThresholds.defaults();
 
+    /**
+     * J7④：Hybrid 每阶段执行器池（可选装配，v3.0 §3.2）。键为范式，值为对应执行循环
+     * （生产装配 {REACT→ReActExecutionLoop, PLAN_AND_EXECUTE→PlanAndExecuteExecutionLoop}）。
+     * <p>缺省 {@code null} → 每阶段固定用构造期 {@code stageExecutor}/{@code stageParadigm}，行为与 v2.0 一致（P10）。
+     * 仅在 HYBRID 范式且决策平面在场时，经 {@code choice} 为每阶段择优"够用的最便宜执行器"。</p>
+     */
+    private Map<RuntimeParadigm, ExecutionLoopService> stageExecutors;
+
     public WorkflowExecutionLoop(ExecutionLoopService stageExecutor,
                                  RuntimeParadigm stageParadigm,
                                  WorkflowRepository workflowRepository,
@@ -108,6 +118,15 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
         this.decisionPort = decisionPort;
         if (thresholds != null) {
             this.decisionThresholds = thresholds;
+        }
+    }
+
+    /**
+     * J7④：装配 Hybrid 每阶段执行器池（可选）。{@code null}/空 → 不启用择优，每阶段固定用构造期执行器（v2.0 行为，P10）。
+     */
+    public void attachStageExecutors(Map<RuntimeParadigm, ExecutionLoopService> stageExecutors) {
+        if (stageExecutors != null && !stageExecutors.isEmpty()) {
+            this.stageExecutors = new EnumMap<>(stageExecutors);
         }
     }
 
@@ -207,7 +226,8 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                 publish(task, "approval", "stage " + stage.getId() + " approved, proceed");
             }
 
-            StageOutcome outcome = runStage(task, agent, stage);
+            StageExecution execution = executeStage(task, agent, stage);
+            StageOutcome outcome = execution.outcome();
             task.addTokens(outcome.tokens);
             if (outcome.success) {
                 completed.add(stage.getId());
@@ -220,6 +240,12 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                 }
                 plan.updateStep(stepIndex, running.withObservation(outcome.answer));
                 publish(task, "progress", "stage " + stage.getId() + " completed");
+                // J7⑤：noul 判整体任务已达成 → 提前成功终止（提效，跳过剩余非必要阶段）
+                if (execution.earlyComplete()) {
+                    publish(task, "progress", "workflow completed early by decision plane (J7⑤)");
+                    snapshotStage(task, state, agent, plan, completed, stageTotal, approvals);
+                    break;
+                }
             } else {
                 plan.updateStep(stepIndex, running.withFailure(outcome.reason));
                 publish(task, "progress", "stage " + stage.getId() + " failed: " + outcome.reason);
@@ -302,14 +328,62 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
         return task;
     }
 
-    /** 委派下层执行器执行单个阶段：以阶段指令框定为子目标，子任务独立计量/状态。 */
+    /** 委派下层执行器执行单个阶段（缺省范式）：J6 有界重试复用此入口。 */
     private StageOutcome runStage(ExecutionTask master, Agent agent, WorkflowStage stage) {
+        return runStageWith(master, agent, stage, stageParadigm);
+    }
+
+    /**
+     * J7：执行单个阶段（Hybrid 感知）。
+     * <p><b>④ 执行器择优</b>：HYBRID 范式 + 执行器池 + 决策平面在场时，用 {@code choice} 为阶段选"够用的最便宜执行器"
+     * （简单抽取→ReAct，复杂多步→Plan）；低置信/缺失/非 HYBRID → 用构造期 {@code stageParadigm}（v2.0 行为，P10）。</p>
+     * <p><b>⑤ 升/降级触发</b>：仅当本阶段走了廉价 ReAct 路径时，用 {@code noul}（批量一次往返）判
+     * "整体已达成"/"陷入重复"——已达成且阶段成功 → 提前成功终止；重复卡死 → 升级 Plan 重跑（接既有 replan-on-failure），
+     * 无升级路径则终止；低置信 → PROCEED，回退既有 {@code LoopDetector}/{@code TerminationGate} 指纹逻辑（P10/P12③）。</p>
+     */
+    private StageExecution executeStage(ExecutionTask master, Agent agent, WorkflowStage stage) {
+        boolean hybrid = master.getParadigm() == RuntimeParadigm.HYBRID;
+        RuntimeParadigm paradigm = stageParadigm;
+        if (hybrid && stageExecutors != null && decisionPort != null) {
+            paradigm = chooseStageParadigm(stage);
+        }
+        StageOutcome outcome = runStageWith(master, agent, stage, paradigm);
+        if (hybrid && decisionPort != null && paradigm == RuntimeParadigm.REACT) {
+            StageSignal signal = assessStageSignal(stage, outcome);
+            if (signal == StageSignal.COMPLETE && outcome.success) {
+                emitRouteCount("early_complete");
+                return new StageExecution(outcome, true);
+            }
+            if (signal == StageSignal.STUCK) {
+                ExecutionLoopService planExecutor = stageExecutors == null
+                        ? null : stageExecutors.get(RuntimeParadigm.PLAN_AND_EXECUTE);
+                if (planExecutor != null) {
+                    emitRouteCount("upgrade_plan");
+                    publish(master, "progress", "stage " + stage.getId()
+                            + " stuck per decision plane, upgrade ReAct->Plan (J7⑤)");
+                    outcome = runStageWith(master, agent, stage, RuntimeParadigm.PLAN_AND_EXECUTE);
+                } else {
+                    emitRouteCount("stuck_terminate");
+                    outcome = StageOutcome.failure(outcome.tokens,
+                            "stage stuck per decision plane and no Plan upgrade path (J7⑤)");
+                }
+            }
+        }
+        return new StageExecution(outcome, false);
+    }
+
+    /** 以指定范式委派对应执行器执行单个阶段：以阶段指令框定为子目标，子任务独立计量/状态。 */
+    private StageOutcome runStageWith(ExecutionTask master, Agent agent, WorkflowStage stage,
+                                      RuntimeParadigm paradigm) {
         agent.addUserMessage("[工作流阶段 " + stage.getId() + "] " + stage.getInstruction());
         ExecutionTask subTask = ExecutionTask.create(
-                master.getAgentId(), master.getBizCode(), stageParadigm, master.getGate());
+                master.getAgentId(), master.getBizCode(), paradigm, master.getGate());
         Plan subPlan = new Plan(master.getAgentId());
+        ExecutionLoopService executor = stageExecutors != null
+                ? stageExecutors.getOrDefault(paradigm, stageExecutor)
+                : stageExecutor;
         try {
-            stageExecutor.execute(subTask, agent, subPlan);
+            executor.execute(subTask, agent, subPlan);
         } catch (RuntimeException e) {
             return StageOutcome.failure(subTask.getConsumedTokens(), "stage executor error: " + e.getMessage());
         }
@@ -320,6 +394,81 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
                 ? subTask.getTerminateReason()
                 : "stage not completed: " + subTask.getStatus();
         return StageOutcome.failure(subTask.getConsumedTokens(), reason);
+    }
+
+    /**
+     * J7④：为 Hybrid 阶段择优执行器范式。高置信 {@code choice} → REACT/PLAN_AND_EXECUTE；
+     * 低置信（&lt; {@code routing} 阈值）/缺失/不可识别 → 构造期 {@code stageParadigm}（P10）。每次发 {@code decision_route_counts}。
+     */
+    private RuntimeParadigm chooseStageParadigm(WorkflowStage stage) {
+        DecisionAnswer answer = decideQuietly(stageExecState(stage),
+                DecisionQuestion.choice("stage-executor",
+                        "为该工作流阶段选择够用的最便宜执行器：简单抽取/单步推理→react，复杂多步/需规划拆解→plan",
+                        Map.of("react", "简单抽取/单步推理，最便宜（底层 ReAct）",
+                                "plan", "复杂多步/需规划拆解（中层 PlanAndExecute）")));
+        RuntimeParadigm chosen = mapExecutorChoice(answer);
+        emitRouteCount(chosen == RuntimeParadigm.REACT ? "stage_react"
+                : chosen == RuntimeParadigm.PLAN_AND_EXECUTE ? "stage_plan"
+                : "stage_executor_fallback");
+        return chosen != null ? chosen : stageParadigm;
+    }
+
+    /** J7④：把执行器择优判定映射为范式；低置信/非 CHOICE/不可识别 → null（回退缺省范式）。 */
+    private RuntimeParadigm mapExecutorChoice(DecisionAnswer answer) {
+        if (answer == null || answer.type() != DecisionType.CHOICE || answer.choice() == null
+                || answer.confidence() < decisionThresholds.routing()) {
+            return null;
+        }
+        return switch (answer.choice().toLowerCase(java.util.Locale.ROOT)) {
+            case "react", "re-act", "simple" -> RuntimeParadigm.REACT;
+            case "plan", "plan-and-execute", "plan_and_execute", "complex" -> RuntimeParadigm.PLAN_AND_EXECUTE;
+            default -> null;
+        };
+    }
+
+    /**
+     * J7⑤：廉价完成/卡死判定（批量一次往返，仅在阶段边界检查点发起）。
+     * <p>{@code stage-complete} 与 {@code stage-stuck} 的值与置信均 ≥ {@code completion}（0.85）才采信；
+     * 否则 PROCEED（回退既有 LoopDetector/TerminationGate，P10/P12③）。异常/缺失一律 PROCEED。</p>
+     */
+    private StageSignal assessStageSignal(WorkflowStage stage, StageOutcome outcome) {
+        String state = "工作流阶段: " + stage.getId()
+                + "\n阶段指令: " + stage.getInstruction()
+                + "\n执行器: ReAct（廉价路径）"
+                + "\n阶段结果: " + (outcome.success ? "成功" : "失败")
+                + "\n阶段产出/原因: " + truncate(outcome.success ? outcome.answer : outcome.reason, 2000);
+        DecisionAnswer complete = null;
+        DecisionAnswer stuck = null;
+        try {
+            DecisionResponse response = decisionPort.decide(DecisionRequest.of(state,
+                    DecisionQuestion.probability("stage-complete",
+                            "给定阶段轨迹，整体任务目标是否已达成、无需后续阶段（0-1，越高越已达成）"),
+                    DecisionQuestion.probability("stage-stuck",
+                            "给定阶段轨迹，该阶段是否陷入重复无效动作而未推进（0-1，越高越卡死）")));
+            if (response != null) {
+                complete = response.answer("stage-complete");
+                stuck = response.answer("stage-stuck");
+            }
+        } catch (RuntimeException e) {
+            return StageSignal.PROCEED;
+        }
+        double threshold = decisionThresholds.completion();
+        if (confidentAtLeast(complete, threshold) && complete.value() >= threshold) {
+            return StageSignal.COMPLETE;
+        }
+        if (confidentAtLeast(stuck, threshold) && stuck.value() >= threshold) {
+            return StageSignal.STUCK;
+        }
+        return StageSignal.PROCEED;
+    }
+
+    private static boolean confidentAtLeast(DecisionAnswer answer, double threshold) {
+        return answer != null && answer.confidence() >= threshold;
+    }
+
+    private String stageExecState(WorkflowStage stage) {
+        return "工作流阶段: " + stage.getId()
+                + "\n阶段指令: " + truncate(stage.getInstruction(), 1000);
     }
 
     /**
@@ -697,6 +846,15 @@ public class WorkflowExecutionLoop implements ExecutionLoopService {
 
     /** J4：闸门升级人审单的阻断状态（pending=true 挂起 / false 拒绝）。 */
     private record GateApprovalBlock(boolean pending, String requestId) {
+    }
+
+    /** J7：单阶段执行结果 + 是否触发"整体已达成"提前终止（⑤）。 */
+    private record StageExecution(StageOutcome outcome, boolean earlyComplete) {
+    }
+
+    /** J7⑤：阶段边界 noul 判定信号——已达成 / 卡死重复 / 放行（低置信回退既有闸门）。 */
+    private enum StageSignal {
+        COMPLETE, STUCK, PROCEED
     }
 
     /** 单阶段执行结果（内部值对象）。 */

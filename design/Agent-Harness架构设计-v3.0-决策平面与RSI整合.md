@@ -177,9 +177,11 @@ DecisionAnswer    { DecisionType type;
 
 | 插入点 | 机制 | 类型 | 收益 |
 |--------|------|------|------|
-| **④ 每阶段执行器择优** | hybrid 中每个 Workflow 阶段委派 Plan 或 ReAct；用 `choice` 选"够用的最便宜执行器"——简单抽取→ReAct，复杂多步→Plan | `choice` | 提效（不为简单阶段烧规划） |
-| **⑤ 升级/降级触发** | ReAct 阶段用 `noul`("是否已完成/是否在重复") 做廉价完成判定与卡死检测，接 `TerminationGate`/`LoopDetector`；该升 Plan 就升、该终止就终止 | `noul` | 提效 + 提准（接既有 replan-on-failure） |
-| **⑥ 层路由（advisory）** | `DefaultLayerRouter` 增可选 `DecisionPort`：`choice` 选 paradigm，**低置信回退现有规则** | `choice` | 路由更准 | ⚠️ **与 R4 学习型路由重叠（RSI，当前排除）**——v3.0 阶段**仅 advisory、非自主自改进**；自动调优留待 R4 |
+| **④ 每阶段执行器择优** | hybrid 中每个 Workflow 阶段委派 Plan 或 ReAct；用 `choice` 选"够用的最便宜执行器"——简单抽取→ReAct，复杂多步→Plan | `choice` | 提效（不为简单阶段烧规划）✅（J7，2026-09-26） |
+| **⑤ 升级/降级触发** | ReAct 阶段用 `noul`("是否已完成/是否在重复") 做廉价完成判定与卡死检测，接 `TerminationGate`/`LoopDetector`；该升 Plan 就升、该终止就终止 | `noul` | 提效 + 提准（接既有 replan-on-failure）✅（J7，2026-09-26） |
+| **⑥ 层路由（advisory）** | `DefaultLayerRouter` 增可选 `DecisionPort`：`choice` 选 paradigm，**低置信回退现有规则** | `choice` | 路由更准 ✅（J8，2026-09-26） | ⚠️ **与 R4 学习型路由重叠（RSI，当前排除）**——v3.0 阶段**仅 advisory、非自主自改进**；自动调优留待 R4 |
+
+> **落地说明（J7–J8，2026-09-26）**：④⑤ 落在 `WorkflowExecutionLoop.executeStage`——HYBRID 范式 + 决策平面在场时，④ 经 `choice("stage-executor")`（阈值 `routing` 0.75）从 `attachStageExecutors` 注入的执行器池 {REACT, PLAN_AND_EXECUTE} 中择优，低置信/缺失/非 HYBRID 回退构造期 `stageParadigm`（v2.0 固定中层 Plan，P10）；⑤ 仅在走了廉价 ReAct 路径时经**一次批量** `noul("stage-complete"/"stage-stuck")`（值+置信均 ≥ `completion` 0.85 才采信，阶段边界即检查点）判：已达成且阶段成功→提前成功终止跳过剩余阶段、重复卡死→升级 ReAct→Plan 重跑（无升级路径则终止）、低置信→PROCEED 回退既有 `LoopDetector`/`TerminationGate`（P12③）。⑥ 落在 `DefaultLayerRouter.route`——先规则后 advisory，`attachDecisionPlane(DecisionPort,阈值)` 经 DecisionPort 接缝注入（后端由 J3 装配、适配 `DecisionEngineSPI`/Jev，**不硬编进路由类**，C1）；高置信 `choice("layer-route")` 覆盖规则，低置信/不可识别/异常回退规则。**合规守卫**：规则判 WORKFLOW/HYBRID 时 advisory 绝不降级到无审批的 REACT/PLAN（P12②只收紧）；**advisory 无状态、不自修改路由规则**（自修改/离线调优属 R4，当前排除）。分流均发 `decision_route_counts`（stage_react/stage_plan/stage_executor_fallback/early_complete/upgrade_plan/stuck_terminate）。start `DomainServiceConfiguration.layerRouter` + `HarnessConfiguration.hybridExecutionLoop` 经 `ObjectProvider` 织入，决策关闭→不织入、行为同 v2.0（P12①）。domain 154 测全绿 + 双冒烟 UP。
 
 ### 3.3 ReAct 模式（`ReActExecutionLoop`）
 
@@ -369,7 +371,7 @@ langur:
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
 
-> **D2 进度（2026-09-26）**：J4 ✅（Workflow 阶段决策闸门，插入点 ①）、J5 ✅（审批风险分级，插入点 ②，CRITICAL 恒人审）、J6 ✅（产物验收闸门，插入点 ③）——Workflow 三插入点全部落地，domain 140 测全绿 + 双冒烟 UP；J7–J10（Hybrid/ReAct/Skill，插入点 ④–⑩）待落地，完成后达 D2。
+> **D2 进度（2026-09-26）**：J4 ✅（Workflow 阶段决策闸门，插入点 ①）、J5 ✅（审批风险分级，插入点 ②，CRITICAL 恒人审）、J6 ✅（产物验收闸门，插入点 ③）、J7 ✅（Hybrid 执行器择优 ④ + 升/降级触发 ⑤）、J8 ✅（层路由 advisory ⑥，仅 advisory 非自改进、合规边界只收紧）——Workflow 三插入点 + Hybrid 两插入点 + 层路由全部落地，domain 154 测全绿 + 双冒烟 UP；J9–J10（ReAct ⑦⑧ / Skill ⑨⑩）待落地，完成后达 D2。
 
 > **D2→D3 的跃迁 = 决策平面从"人工标定的判定器"进化为"自我优化的判定器"**，这正是 Jev 与 RSI 整合的终局价值，也是 P11/P12/R-G 必须全程在场的原因。
 
