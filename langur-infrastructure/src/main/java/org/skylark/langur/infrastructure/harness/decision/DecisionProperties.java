@@ -44,6 +44,12 @@ public class DecisionProperties {
     /** 录制进轨迹快照（R0 前向兼容，强烈建议常开，P12④/DD12）。 */
     private boolean record = true;
 
+    /**
+     * J9：ReAct 决策平面语义判定的检查点间隔（每 N 轮发起一次批量判定，红线：绝不逐轮网络往返）；
+     * ≤0 关闭 ReAct 语义判定（终止仍由既有指纹/闸门决定，P10）。缺省 3 轮。
+     */
+    private int reactCheckpointRounds = 3;
+
     private final Cache cache = new Cache();
     private final Thresholds thresholds = new Thresholds();
     private final DataResidency dataResidency = new DataResidency();

@@ -187,15 +187,20 @@ DecisionAnswer    { DecisionType type;
 
 | 插入点 | 机制 | 红线 |
 |--------|------|------|
-| **⑦ 完成判定** | `noul`("给定轨迹，任务是否已达成") 作为 `TerminationGate` 的**附加信号**（不替代四维硬约束） | 网络判定**只在检查点**调用（如每 N 轮），避免每轮往返反噬延迟 |
-| **⑧ 卡死检测** | `choice`("是否在重复同一无效动作") 补 `LoopDetector` 指纹去重之外的语义判定 | 低置信 → 以既有指纹检测为准 |
+| **⑦ 完成判定** | `noul`("给定轨迹，任务是否已达成") 作为 `TerminationGate` 的**附加信号**（不替代四维硬约束） | 网络判定**只在检查点**调用（如每 N 轮），避免每轮往返反噬延迟 ✅（J9，2026-09-26） |
+| **⑧ 卡死检测** | `choice`("是否在重复同一无效动作") 补 `LoopDetector` 指纹去重之外的语义判定 | 低置信 → 以既有指纹检测为准 ✅（J9，2026-09-26） |
+
+> **落地说明（J9，2026-09-26）**：⑦⑧ 落在 `ReActExecutionLoop` 主循环——`LoopDetector` 指纹判定之后、快照写入之前插入**检查点语义判定**：`isDecisionCheckpoint(round)` 仅当 `round % N == 0`（缺省 N=3，配置 `langur.decision.react-checkpoint-rounds`）才发起**单次批量** `decide`（`task-complete` noul + `trajectory-stuck` choice，红线：绝不逐轮往返）。⑦ 值+置信均 ≥ `completion`（0.85）→ 合成最终答案提前**成功**终止（`react_early_complete`，**附加信号，不替代四维硬约束**）；⑧ choice 高置信判 `stuck` → `LOOP_DETECTED`（`react_stuck`）；低置信/缺失/异常 → PROCEED（`react_proceed`）回退既有指纹 + 闸门（P10/P12③）。`attachDecisionPlane(DecisionPort,阈值,检查点间隔)` 经 DecisionPort 接缝注入（P2 不破），`HarnessConfiguration.reActExecutionLoop` 以 `ObjectProvider` 织入；决策平面缺失（缺省 enabled=false）→ 不织入、行为同 v2.0（P12①）。分流发 `decision_route_counts`。domain 158 测全绿（新增 `ReActExecutionLoopDecisionTest` 4，无 Mockito）+ 双冒烟 UP。
 
 ### 3.4 Skill 子系统（`SkillExecutor` / `StepType`）
 
 | 插入点 | 机制 |
 |--------|------|
-| **⑨ DECISION 步骤** | 新增 `StepType.DECISION`：由 `DecisionPort` 求值的**语义条件**（"这段代码上下文是否足以转译 PRD？"），补 `SkillExpressionResolver` 只能判结构化字段的短板；与既有 `CONDITION`（确定性表达式）并存，各取所长 |
-| **⑩ 转译 PRD 质量门** | `TranslatePrdSkill` 的 `draft` 步骤后加 DECISION 验收（`score` 完整性），低分触发有界重draft |
+| **⑨ DECISION 步骤** | 新增 `StepType.DECISION`：由 `DecisionPort` 求值的**语义条件**（"这段代码上下文是否足以转译 PRD？"），补 `SkillExpressionResolver` 只能判结构化字段的短板；与既有 `CONDITION`（确定性表达式）并存，各取所长 ✅（J10，2026-09-26） |
+| **⑩ 转译 PRD 质量门** | `TranslatePrdSkill` 的 `draft` 步骤后加 DECISION 验收（`score` 完整性），低分触发有界重draft ✅（J10，2026-09-26） |
+
+> **落地说明（J10，2026-09-26）**：⑨ `StepType` 增 `DECISION`，`SkillStep` 增 `decisionKey/decisionType(score\|noul)/decisionInstructions/decisionThreshold`（复用 `arguments` 承载被判定材料、`onTrue/onFalse` 承载分支）+ 工厂 `decisionScore/decisionNoul`；`SkillExecutor` 把 DECISION 与 CONDITION 同列**分支步**（`nextIndexOf` 统一解析跳转目标，沿用 `MAX_STEPS=1000` 硬上限防环）。`evaluateDecision` 经注入的 `DecisionPort`（新 6 参构造，`DefaultSkillToolGateway` 以 `ObjectProvider` 织入，infra 依赖 domain 端口合 P2）构造 score/noul 问题（判定材料由 `arguments` 占位符解析后渲染进 `state`），值+置信均 ≥ 阈值 → `onTrue` 否则 `onFalse`（低置信 fail-closed，P12③）；**兜底**：`DecisionPort` 缺失/后端异常/无答案 → P10 降级（有 `condition` 表达式则按其求值＝"降级为 CONDITION"，否则默认放行 `onTrue`＝等价 v2.0 无质量门），**绝不中断技能**。⑩ `TranslatePrdSkill` 在 `draft` 后加 `quality-gate`（`decisionScore` 阈值 0.8，`onTrue=END` 直接产出、`onFalse=redraft`），`redraft` 为**有界一次**重写（其后无第二道门，顺序结束）。infra 317 测全绿（新增 `SkillExecutorDecisionTest` 10 + 同步 `TranslatePrdSkillTest` 2→4 步）+ 双冒烟 UP。**N2（J4–J10）全部落地，达成熟度 D2。**
+
 
 ### 3.5 与五层防御 / 安全平面的关系（强制红线）
 
@@ -371,7 +376,7 @@ langur:
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
 
-> **D2 进度（2026-09-26）**：J4 ✅（Workflow 阶段决策闸门，插入点 ①）、J5 ✅（审批风险分级，插入点 ②，CRITICAL 恒人审）、J6 ✅（产物验收闸门，插入点 ③）、J7 ✅（Hybrid 执行器择优 ④ + 升/降级触发 ⑤）、J8 ✅（层路由 advisory ⑥，仅 advisory 非自改进、合规边界只收紧）——Workflow 三插入点 + Hybrid 两插入点 + 层路由全部落地，domain 154 测全绿 + 双冒烟 UP；J9–J10（ReAct ⑦⑧ / Skill ⑨⑩）待落地，完成后达 D2。
+> **D2 进度（2026-09-26）**：J4 ✅（Workflow 阶段决策闸门，插入点 ①）、J5 ✅（审批风险分级，插入点 ②，CRITICAL 恒人审）、J6 ✅（产物验收闸门，插入点 ③）、J7 ✅（Hybrid 执行器择优 ④ + 升/降级触发 ⑤）、J8 ✅（层路由 advisory ⑥，仅 advisory 非自改进、合规边界只收紧）、J9 ✅（ReAct 完成判定 ⑦ + 卡死检测 ⑧，检查点批量判定、附加信号不替代四维硬约束）、J10 ✅（Skill `DECISION` 步骤 ⑨ + 转译 PRD 质量门 ⑩，缺后端降级不中断）——**十插入点 ①–⑩ 全部落地，N2（J4–J10）完成，达成熟度 D2（Jev 闸门生效）**；domain 158 + infra 317 + start 33 测全绿，默认关/开启双冒烟 UP。下一步 D3 需 RSI 解锁（R0 回放 + R4 离线调优阈值/prompt/路由），当前 RSI 暂停、N3–N5 待派发。
 
 > **D2→D3 的跃迁 = 决策平面从"人工标定的判定器"进化为"自我优化的判定器"**，这正是 Jev 与 RSI 整合的终局价值，也是 P11/P12/R-G 必须全程在场的原因。
 

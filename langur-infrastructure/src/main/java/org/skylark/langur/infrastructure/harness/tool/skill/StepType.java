@@ -11,6 +11,13 @@ public enum StepType {
     /** 条件分支：按表达式结果跳转到指定步骤或结束。 */
     CONDITION,
 
+    /**
+     * 语义决策分支（J10⑨）：由 {@code DecisionPort} 求值的语义条件（noul/score），
+     * 达阈值跳 {@code onTrue} 否则 {@code onFalse}。与 {@link #CONDITION}（确定性表达式）并存，各展所长；
+     * 决策平面缺失时降级为 CONDITION（若可表达）或默认放行分支（P10）。沿用步数硬上限防环。
+     */
+    DECISION,
+
     /** 调用大模型（M4 ACTION / M5 REASONING），产出文本写入上下文。 */
     LLM_CALL,
 

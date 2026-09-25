@@ -151,6 +151,7 @@ langur:
   #   timeout-millis: 800                                   # 判定须远快于生成；超时 fail-closed
   #   batch: true                                           # 批量投机扇出（state 只发一次）
   #   record: true                                          # 决策轨迹录制（R0 前向兼容，P12④，不可关）
+  #   react-checkpoint-rounds: 3                            # J9：ReAct 语义判定检查点间隔（每 N 轮一次，红线绝不逐轮往返）；≤0 关闭
   #   cache:
   #     enabled: true                                       # H4 CacheBackend 按 state 哈希缓存判定（TTL 内零成本）
   #     ttl-seconds: 300
