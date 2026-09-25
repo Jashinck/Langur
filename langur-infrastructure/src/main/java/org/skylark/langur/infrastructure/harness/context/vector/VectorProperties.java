@@ -46,7 +46,7 @@ public class VectorProperties {
         private double lexicalWeight = 0.3d;
     }
 
-    /** Elasticsearch 连接（DD15 官方客户端；H14.5）。 */
+    /** Elasticsearch 连接（H14.5；DD15 偏差：REST/WebClient 直连而非官方 SDK，理由见 RoadMap 2.1 §10 完成记录）。 */
     @Getter
     @Setter
     public static class Elasticsearch {
@@ -55,8 +55,11 @@ public class VectorProperties {
         private String username = "";
         /** 密钥引用（env:/prop:/kms:），经 {@code SecretResolver} 解析，绝不落明文。 */
         private String passwordRef;
-        /** RRF retriever 授权层（DD20）；未授权时降级为两查询 + 客户端 RRF 融合。 */
-        private boolean nativeRrf = true;
+        /**
+         * RRF retriever 原生下推（DD20 已核实：Platinum+ 付费授权层）；默认 false 走
+         * "BM25 + kNN 两查询 + 客户端 RRF 融合"。授权环境可显式开启，原生失败自动降级客户端融合（P10）。
+         */
+        private boolean nativeRrf = false;
     }
 
     /** Milvus 连接（DD16 官方 SDK；H14.6）。 */

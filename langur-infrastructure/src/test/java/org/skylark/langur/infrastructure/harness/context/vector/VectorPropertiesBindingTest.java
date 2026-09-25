@@ -29,7 +29,7 @@ class VectorPropertiesBindingTest {
         assertEquals("rrf", props.getHybrid().getFusion());
         assertEquals(60, props.getHybrid().getRrfK());
         assertEquals(0.3d, props.getHybrid().getLexicalWeight());
-        assertTrue(props.getElasticsearch().isNativeRrf(), "DD20 缺省假定授权可用");
+        assertFalse(props.getElasticsearch().isNativeRrf(), "DD20 已核实 RRF retriever 为付费授权层，缺省客户端融合");
     }
 
     @Test
@@ -46,7 +46,7 @@ class VectorPropertiesBindingTest {
         source.put("langur.vector.elasticsearch.index", "kb");
         source.put("langur.vector.elasticsearch.username", "elastic");
         source.put("langur.vector.elasticsearch.password-ref", "env:ES_PW");
-        source.put("langur.vector.elasticsearch.native-rrf", "false");
+        source.put("langur.vector.elasticsearch.native-rrf", "true");
 
         Binder binder = new Binder(new MapConfigurationPropertySource(source));
         VectorProperties props = binder.bind("langur.vector", VectorProperties.class).get();
@@ -62,7 +62,7 @@ class VectorPropertiesBindingTest {
         assertEquals("kb", props.getElasticsearch().getIndex());
         assertEquals("elastic", props.getElasticsearch().getUsername());
         assertEquals("env:ES_PW", props.getElasticsearch().getPasswordRef(), "password-ref 绑定为引用而非明文");
-        assertFalse(props.getElasticsearch().isNativeRrf(), "DD20 未授权可关闭原生 RRF 走客户端融合");
+        assertTrue(props.getElasticsearch().isNativeRrf(), "DD20 授权环境可显式开启原生 retriever.rrf（失败自动降级）");
     }
 
     @Test
