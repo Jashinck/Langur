@@ -3,6 +3,12 @@ package org.skylark.langur.domain.harness.execution;
 import org.skylark.langur.domain.harness.context.AgentContext;
 import org.skylark.langur.domain.harness.context.AgentContextRepository;
 import org.skylark.langur.domain.harness.context.ContextAssembler;
+import org.skylark.langur.domain.harness.decision.DecisionAnswer;
+import org.skylark.langur.domain.harness.decision.DecisionQuestion;
+import org.skylark.langur.domain.harness.decision.DecisionRequest;
+import org.skylark.langur.domain.harness.decision.DecisionResponse;
+import org.skylark.langur.domain.harness.decision.DecisionThresholds;
+import org.skylark.langur.domain.harness.decision.DecisionType;
 import org.skylark.langur.domain.harness.evaluation.AuditRecord;
 import org.skylark.langur.domain.harness.evaluation.Checksums;
 import org.skylark.langur.domain.harness.evaluation.EvaluationService;
@@ -23,6 +29,7 @@ import org.skylark.langur.domain.harness.state.TaskStateStatus;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
+import org.skylark.langur.domain.port.DecisionPort;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.domain.service.AgentDomainService;
 
@@ -61,6 +68,37 @@ public class ReActExecutionLoop implements ExecutionLoopService {
 
     private ExecutionSpan startSpan(SpanType type, String operationName) {
         return (tracer != null ? tracer : ExecutionTracer.NOOP).startSpan(type, operationName);
+    }
+
+    /** J9 缺省检查点间隔：每 3 轮发起一次决策平面语义判定（红线：绝不逐轮网络往返）。 */
+    private static final int DEFAULT_CHECKPOINT_INTERVAL = 3;
+
+    /**
+     * 决策平面端口（J9⑦⑧，可选装配，v3.0 §3.3）。缺省 {@code null} → 不发起任何语义判定，
+     * 终止完全由既有 {@link LoopDetector} 指纹 + {@code TerminationGate} 四维硬约束决定，行为与 v2.0 一致（P10/P12①）。
+     */
+    private DecisionPort decisionPort;
+
+    /** J9 置信阈值（复用 {@code completion} 维）；缺省 DD11 经验值。 */
+    private DecisionThresholds decisionThresholds = DecisionThresholds.defaults();
+
+    /** J9 红线：语义判定只在检查点发起（每 N 轮一次），避免逐轮往返放大时延；≤0 视为关闭判定。 */
+    private int decisionCheckpointInterval = DEFAULT_CHECKPOINT_INTERVAL;
+
+    /**
+     * 装配决策平面（J9⑦⑧，可选）：注入 J3 装饰链端口 + 置信阈值 + 检查点间隔。
+     * <p>{@code null} 端口 → 保持缺省，不发起语义判定，终止仍由既有指纹/闸门决定（P10/P12①）；
+     * {@code null} 阈值 → 沿用 DD11 缺省；{@code null}/≤0 间隔 → 沿用缺省 {@value #DEFAULT_CHECKPOINT_INTERVAL} 轮。</p>
+     */
+    public void attachDecisionPlane(DecisionPort decisionPort, DecisionThresholds thresholds,
+                                    Integer checkpointInterval) {
+        this.decisionPort = decisionPort;
+        if (thresholds != null) {
+            this.decisionThresholds = thresholds;
+        }
+        if (checkpointInterval != null && checkpointInterval > 0) {
+            this.decisionCheckpointInterval = checkpointInterval;
+        }
     }
 
     public ReActExecutionLoop(AgentDomainService agentDomainService,
@@ -183,6 +221,27 @@ public class ReActExecutionLoop implements ExecutionLoopService {
                     break;
                 }
 
+                // [E] 决策平面语义判定（J9⑦⑧）：仅在检查点发起，作为既有指纹/闸门之外的附加信号
+                if (finalAnswer == null && decisionPort != null && isDecisionCheckpoint(task.getCurrentRound())) {
+                    DecisionSignal signal = assessTrajectory(agent, plan);
+                    if (signal == DecisionSignal.COMPLETE) {
+                        // ⑦ noul 判"已达成" → 提前成功终止（不替代四维硬约束，仅新增一条早停信号）
+                        emitRouteCount("react_early_complete");
+                        finalAnswer = synthesizeCompletion(plan);
+                        break;
+                    }
+                    if (signal == DecisionSignal.STUCK) {
+                        // ⑧ choice 判"重复无效" → 补 LoopDetector 指纹之外的语义卡死判定
+                        emitRouteCount("react_stuck");
+                        loopDetected = true;
+                        interceptions++;
+                        auditInterception(task, "LOOP_DETECTED",
+                                "decision plane judged trajectory stuck (J9⑧)");
+                        break;
+                    }
+                    emitRouteCount("react_proceed");
+                }
+
                 // [S] 本轮快照写入（断点续跑/回滚基础）
                 if (fire(HookPoint.BEFORE_STATE_SAVE, task, null) == null) {
                     try (ExecutionSpan span = startSpan(SpanType.SNAPSHOT, "state.save")) {
@@ -277,6 +336,97 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         }
         PlanStep last = plan.getSteps().get(plan.getSteps().size() - 1);
         return loopDetector.recordAndDetect(last.getAction(), last.getObservation());
+    }
+
+    /** J9 红线：仅当轮次命中检查点间隔（每 N 轮）才发起语义判定，杜绝逐轮网络往返。 */
+    private boolean isDecisionCheckpoint(int round) {
+        return decisionCheckpointInterval > 0
+                && round > 0
+                && round % decisionCheckpointInterval == 0;
+    }
+
+    /**
+     * J9⑦⑧：在检查点对当前轨迹做一次批量语义判定（单次往返）。
+     * <p>{@code task-complete}（noul）值与置信均 ≥ {@code completion} → COMPLETE（提前成功终止）；
+     * {@code trajectory-stuck}（choice）高置信判 stuck → STUCK（补指纹之外的卡死判定）；
+     * 低置信/缺失/异常 → PROCEED（回退既有 {@link LoopDetector}/{@code TerminationGate}，P10/P12③）。</p>
+     */
+    private DecisionSignal assessTrajectory(Agent agent, Plan plan) {
+        String state = trajectoryState(agent, plan);
+        DecisionAnswer complete = null;
+        DecisionAnswer stuck = null;
+        try {
+            DecisionResponse response = decisionPort.decide(DecisionRequest.of(state,
+                    DecisionQuestion.probability("task-complete",
+                            "给定当前 ReAct 执行轨迹，任务目标是否已达成、可安全停止（0-1，越高越已达成）"),
+                    DecisionQuestion.choice("trajectory-stuck",
+                            "给定当前轨迹，Agent 是否在重复同一无效动作而未推进",
+                            Map.of("stuck", "在重复同一无效动作、未推进",
+                                    "progressing", "正常推进、有实质进展"))));
+            if (response != null) {
+                complete = response.answer("task-complete");
+                stuck = response.answer("trajectory-stuck");
+            }
+        } catch (RuntimeException e) {
+            return DecisionSignal.PROCEED;
+        }
+        double threshold = decisionThresholds.completion();
+        if (complete != null && complete.type() == DecisionType.PROBABILITY
+                && complete.confidence() >= threshold && complete.value() >= threshold) {
+            return DecisionSignal.COMPLETE;
+        }
+        if (stuck != null && stuck.type() == DecisionType.CHOICE
+                && stuck.confidence() >= threshold
+                && "stuck".equalsIgnoreCase(stuck.choice())) {
+            return DecisionSignal.STUCK;
+        }
+        return DecisionSignal.PROCEED;
+    }
+
+    /** J9⑦：提前成功终止时合成最终答案——优先取最近一步观察，缺失时回退整条轨迹。 */
+    private String synthesizeCompletion(Plan plan) {
+        List<PlanStep> steps = plan.getSteps();
+        for (int i = steps.size() - 1; i >= 0; i--) {
+            String observation = steps.get(i).getObservation();
+            if (observation != null && !observation.isBlank()) {
+                return observation;
+            }
+        }
+        return plan.toTraceString();
+    }
+
+    private String trajectoryState(Agent agent, Plan plan) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("任务目标: ").append(truncate(inferencePayload(agent), 1000)).append('\n');
+        sb.append("已执行轮次: ").append(plan.getSteps().size()).append('\n');
+        sb.append("轨迹:\n").append(truncate(plan.toTraceString(), 3000));
+        return sb.toString();
+    }
+
+    private static String truncate(String text, int max) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() <= max ? text : text.substring(0, max) + "...";
+    }
+
+    /** 分流计数进 {@code decision_route_counts}（DECISION 维度，经 H5 → Micrometer 事件计数）。 */
+    private void emitRouteCount(String action) {
+        if (evaluationService == null) {
+            return;
+        }
+        try {
+            ExecutionMetrics metrics = ExecutionMetrics.of("decision-plane");
+            metrics.record(MetricDimension.DECISION, "decision_route_counts", action);
+            evaluationService.report(metrics);
+        } catch (RuntimeException ignored) {
+            // P10：埋点失败静默丢弃
+        }
+    }
+
+    /** J9⑦⑧：检查点语义判定信号——已达成 / 卡死重复 / 放行（低置信回退既有闸门）。 */
+    private enum DecisionSignal {
+        COMPLETE, STUCK, PROCEED
     }
 
     /**

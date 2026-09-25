@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.harness.tool.skill;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.skylark.langur.domain.harness.tool.ToolDispatcher;
+import org.skylark.langur.domain.port.DecisionPort;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
 import org.skylark.langur.infrastructure.llm.ModelRole;
 import org.springframework.beans.factory.ObjectProvider;
@@ -17,6 +18,8 @@ import java.util.Map;
  * <p>H8：{@link LlmGateway} 适配为 {@link SkillLlmPort} 支撑 {@code LLM_CALL}（角色名 → {@link ModelRole}）；
  * {@link SubAgentInvoker} 为可选依赖，缺失时 {@code SUB_AGENT} 步骤抛出明确异常。二者均以 {@link ObjectProvider}
  * 松耦合注入，技能引擎在无 LLM/子 Agent 环境下仍可执行 TOOL_CALL/CONDITION/LOOP/PARALLEL/SUB_WORKFLOW。</p>
+ * <p>J10⑨：{@link DecisionPort}（决策平面，J3 装饰链）同样以 {@link ObjectProvider} 松耦合注入支撑
+ * {@code DECISION} 语义步骤；决策平面关闭（缺省）时取空 → {@code DECISION} 步骤降级为 CONDITION/默认放行（P10/P12①）。</p>
  */
 @Component
 public class DefaultSkillToolGateway implements SkillToolGateway {
@@ -28,11 +31,13 @@ public class DefaultSkillToolGateway implements SkillToolGateway {
                                    @Lazy ToolDispatcher dispatcher,
                                    ObjectMapper objectMapper,
                                    ObjectProvider<LlmGateway> llmGatewayProvider,
-                                   ObjectProvider<SubAgentInvoker> subAgentInvokerProvider) {
+                                   ObjectProvider<SubAgentInvoker> subAgentInvokerProvider,
+                                   ObjectProvider<DecisionPort> decisionPortProvider) {
         this.catalog = catalog;
         SkillLlmPort llmPort = toLlmPort(llmGatewayProvider.getIfAvailable());
         this.executor = new SkillExecutor(dispatcher, new SkillExpressionResolver(objectMapper),
-                llmPort, subAgentInvokerProvider.getIfAvailable(), null);
+                llmPort, subAgentInvokerProvider.getIfAvailable(), null,
+                decisionPortProvider.getIfAvailable());
     }
 
     /** 将 {@link LlmGateway} 适配为 {@link SkillLlmPort}：角色名解析为 {@link ModelRole}，未知角色回退 ACTION。 */

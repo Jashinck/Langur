@@ -80,7 +80,9 @@ public class HarnessConfiguration {
                                                  ToolDispatcher toolDispatcher,
                                                  ContextAssembler contextAssembler,
                                                  AgentContextRepository contextRepository,
-                                                 ExecutionTracer executionTracer) {
+                                                 ExecutionTracer executionTracer,
+                                                 ObjectProvider<DecisionPort> decisionPortProvider,
+                                                 ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
         // 将钩子引擎织入领域服务，覆盖 BEFORE/AFTER_TOOL_CALL 拦截点
         agentDomainService.attachHookEngine(hookEngine);
         // 将 T 组件统一调度器织入领域服务：工具调用必经四层校验链 + 沙箱（§1.2 模型与环境隔离）
@@ -93,6 +95,8 @@ public class HarnessConfiguration {
         loop.attachLoopDetector(LoopDetector.defaults());
         // 织入全链路追踪器（T12）：六类 Span 埋点（未启用时为 NOOP，零开销）
         loop.attachTracer(executionTracer);
+        // J9⑦⑧：织入决策平面语义判定（完成/卡死）；关闭（缺省）时不织入，终止仍由既有指纹/闸门决定（P12①）
+        attachDecisionPlane(loop, decisionPortProvider, decisionPropertiesProvider);
         return loop;
     }
 
@@ -211,6 +215,24 @@ public class HarnessConfiguration {
         DecisionProperties properties = decisionPropertiesProvider.getIfAvailable();
         loop.attachDecisionPlane(decisionPort,
                 properties != null ? properties.getThresholds().toDomain() : null);
+    }
+
+    /**
+     * J9⑦⑧：把决策平面与置信阈值 + 检查点间隔织入 ReAct 底层循环。
+     * 决策平面关闭（缺省）时 provider 取空 → 不织入，终止仍由既有 LoopDetector 指纹 + TerminationGate 四维硬约束
+     * 决定，行为与 v2.0 一致（P12①）。检查点间隔取 {@code langur.decision.react-checkpoint-rounds}（缺省 3 轮）。
+     */
+    private static void attachDecisionPlane(ReActExecutionLoop loop,
+                                            ObjectProvider<DecisionPort> decisionPortProvider,
+                                            ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
+        DecisionPort decisionPort = decisionPortProvider.getIfAvailable();
+        if (decisionPort == null) {
+            return;
+        }
+        DecisionProperties properties = decisionPropertiesProvider.getIfAvailable();
+        loop.attachDecisionPlane(decisionPort,
+                properties != null ? properties.getThresholds().toDomain() : null,
+                properties != null ? properties.getReactCheckpointRounds() : null);
     }
 
     /**
