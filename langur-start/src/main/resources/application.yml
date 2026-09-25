@@ -89,9 +89,32 @@ langur:
     fallback-chains:
       gpt-4o: [deepseek-chat, qwen-max]
       gemini-1.5-pro: [gpt-4o]
-  # C 组件 L4 向量存储：memory（默认，可测试）| pgvector（生产，需独立 vectorJdbcTemplate 数据源）
+  # C 组件 L4 向量存储：memory（默认，可测试）| pgvector（生产，需独立 vectorJdbcTemplate 数据源）| elasticsearch | milvus
   vector:
     store: memory
+    # dimension: 留空则由 EmbeddingPort.dimensions() 驱动（lexical=256 / llm=embedding.dimensions）；
+    #            显式配置须与之一致，否则启动守卫 fail-fast（H14.8，DD19 全局单维）
+    hybrid:
+      enabled: false          # 默认关闭：memory/pgvector 走既有 search + 应用侧 rerank 路径（P10 行为不变）
+      mode: native            # native（ES/Milvus 服务端下推融合）| app（强制应用侧 EmbeddingRerankPort）
+      fusion: rrf             # rrf（默认，DD17 免归一化）| weighted（需归一化 BM25/cosine 分数）
+      rrf-k: 60               # RRF 常数 k
+      lexical-weight: 0.3     # weighted 模式下词面权重
+    # elasticsearch:            # H14.5，store=elasticsearch 时生效
+    #   uris: http://localhost:9200
+    #   index: langur_vectors
+    #   username: ""
+    #   password-ref: env:ES_PASSWORD
+    #   native-rrf: true        # DD20：false 则降级为两查询 + 客户端 RRF 融合
+    # milvus:                   # H14.6，store=milvus 时生效
+    #   uri: http://localhost:19530
+    #   collection: langur_vectors
+    #   username: ""
+    #   password-ref: env:MILVUS_PASSWORD
+    # pgvector:                 # H14.7，store=pgvector 时生效（独立数据源）
+    #   url: jdbc:postgresql://localhost:5432/langur
+    #   username: postgres
+    #   password-ref: env:PG_PASSWORD
   # H2 / M2 语义嵌入：lexical（默认，本地词袋，无外部依赖）| llm（走 provider /embeddings 真实语义向量）
   # type=llm 时 dimensions 须与向量库建表维度一致（DD7 配置化）；provider 调用失败自动降级本地哈希嵌入（P10）
   embedding:
