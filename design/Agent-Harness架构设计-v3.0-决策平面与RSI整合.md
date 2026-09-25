@@ -149,7 +149,7 @@ DecisionAnswer    { DecisionType type;
 
 | 装饰器 | 职责 | 对应原则/RSI |
 |--------|------|--------------|
-| `RecordingDecisionPort` | 把每次 `decide` 的 request/response **录制进轨迹快照**（与 LLM 录制同通道） | **R0 回放确定性（DD5 扩展）**——否则反事实重放失真 |
+| `RecordingDecisionPort` ✅（J2，2026-09-26） | 把每次 `decide` 的 request/response **录制进轨迹快照**（与 LLM 录制同通道，复用 S 组件 `StateSnapshot` + `DecisionTrajectoryRecorder`）；并经 H5 上报决策维度指标 + 审计 checksum | **R0 回放确定性（DD5 扩展）**——否则反事实重放失真 |
 | `ThresholdRouter` | `confidence ≥ 阈值` → 程序化分流；`< 阈值` → fail-closed（升级/人审/回退规则） | P10 降级 + P12 advisory |
 | `CachingDecisionPort` | 按 `state` 哈希 + 问题签名缓存判定（复用 H4 `CacheBackend`） | 效率（多闸门不重复调用） |
 
@@ -317,6 +317,8 @@ langur:
 | `decision_route_counts` | 按阈值分流计数（run/skip/branch/approve/abort） | 行为审计 |
 | `decision_cost` | 输入 token 计量（复用 H1 `TokenUsage`） | 成本核算 |
 
+> **落地状态（J2，2026-09-26）**：`decision_latency`/`decision_confidence`/`decision_fallback_rate`/`decision_cost` 已由 `RecordingDecisionPort` 经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 `MeterRegistry`（新增 `MetricDimension.DECISION`，指标名 `langur.harness.decision_*`，`/actuator/prometheus` 可暴露）；`decision_fallback_rate` 依 `RuleFallbackDecisionAdapter` 的 confidence 恒 0 契约推断降级。`decision_route_counts` 由 J3 `ThresholdRouter` 补齐。
+
 ### 6.2 确定性（R0 前提，C2）
 
 - **录制**：`record: true` 时，每次 `decide` 的 request+response 落轨迹快照（与 LLM 录制同通道）。
@@ -355,7 +357,7 @@ langur:
 | **D0** | 规则判定（现状） | 正则/字符串/固定规则 + 昂贵 M5 判定 | — | 低（但脆弱/贵） |
 | **D1** | Jev advisory | `DecisionPort` 接入，仅非安全闸门做**建议** + 规则兜底，默认关、可录制 | J1–J3 | 低 |
 
-> **D1 进度（2026-09-25）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2（录制 + 决策指标）、J3（装配 + 阈值路由 + 缓存 + local 后端 + 数据驻留）待落地，二者完成后达 D1。
+> **D1 进度（2026-09-26）**：J1 ✅（`DecisionPort` 契约 + `TypeSafeDecisionAdapter` + `RuleFallbackDecisionAdapter`，17 测全绿）；J2 ✅（`RecordingDecisionPort` 录制 + 决策维度指标 + 审计 checksum，7 测全绿）；J3（装配 + 阈值路由 + 缓存 + local 后端 + 数据驻留）待落地，完成后达 D1。
 | **D2** | Jev 闸门生效 | Workflow 决策闸门 / 审批分级(非CRITICAL) / 产物验收 / 执行器择优 上线，批量+缓存+录制 | J4–J10 | 中 |
 | **D3** | RSI 调优 Jev | R4 经回放+灰度自动调阈值/prompt/路由（`DecisionEngineSPI` 热插拔） | R0 R-G R4 | 中-高（受 R-G 统辖） |
 

@@ -99,7 +99,7 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 - **依赖**：无 | **优先级**：P0 | **估算**：M
 
 ### J2. `RecordingDecisionPort` 录制 + 决策维度指标
-- [ ] 待派发
+- [x] 已完成（2026-09-26）
 - **现状/问题**：Jev 是外部模型，若不录制则 R0 反事实回放失真（C2）；决策行为无指标，无法标定阈值/核算成本。
 - **改动要点**：
   - **infra**：`RecordingDecisionPort`（装饰器）——`record=true` 时把每次 `decide` 的 request+response 写入**轨迹快照**（与 LLM 录制同通道，复用 S 组件 `StateSnapshot`/轨迹仓库埋点），**R0 前向兼容**（现在埋点，R0 落地即可直接回放，v3.0 §11）。
@@ -329,3 +329,4 @@ N5                                                    [R-G][R4/R5/H11/H12...]
 |------|------|------|
 | 2026-09-25 | — | RoadMap 3.0 创建：依据 v3.0 架构文档规划 J1–J10（决策平面）+ 承接 R0–R5/R-G（RSI，待派发）+ 保留 H11/H12；全部任务待派发，Phase 0（N1–N2）可独立排期，N3–N5 以 RSI 解锁为前置门 |
 | 2026-09-25 | J1 | `DecisionPort` 契约落 domain（`port/DecisionPort` + `harness/decision/{DecisionRequest,DecisionQuestion,DecisionType(choice/noul/score),DecisionResponse,DecisionAnswer,DecisionThresholds}`，纯 JDK 零外部依赖，P1 已断言无 Spring/Jackson import）；usage 复用 H1 `LLMPort.TokenUsage`；infra `TypeSafeDecisionAdapter`（WebClient POST `{state,model,questions{noul\|choice\|score,instructions,criteria}}`，批量投机扇出 state 只发一次，解析 choice/value+confidence+distribution+usage，异常/超时/无问题委派兜底不抛出）+ `RuleFallbackDecisionAdapter`（复用 H10 `OutputContentReviewer`，confidence 恒 0 → J3 ThresholdRouter fail-closed）；DD13 domain 新端口、infra 适配既有 `DecisionEngineSPI`（J3 装配）；适配器不带 `@Component`，J3 条件装配。新增 17 测（domain 7 + infra 10，HttpServer 离线桩），`mvn clean test` 全绿（infra 271→281）。未改装配，无需冒烟 |
+| 2026-09-26 | J2 | `RecordingDecisionPort` 装饰器（包裹后端，判定原样透传）：`record=true` 时把 request/response/latencyMillis 封为 S 组件 `StateSnapshot` 交 `DecisionTrajectoryRecorder` 落轨迹（R0 前向兼容 C2/DD12；缺省实现 `LoggingDecisionTrajectoryRecorder`，J3 装配）；决策维度指标经 H5 `EvaluationService`→`MicrometerEvaluationService` 落 MeterRegistry（新增 `MetricDimension.DECISION`，v3.0 §6.1）：`decision_latency`/`decision_confidence`(均值)/`decision_fallback_rate`(依 RuleFallback confidence 恒 0 契约推断降级)/`decision_cost`(输入 token，复用 H1)；`decision_route_counts` 留 J3；判定（含 confidence/distribution）经 `Checksums.sha256` 写审计链。录制/指标/审计失败静默降级（P10）。新增 7 测（SimpleMeterRegistry + 捕获桩），`mvn clean test` 全绿（domain 121→128、infra 281→288）。未改装配，无需冒烟 |
