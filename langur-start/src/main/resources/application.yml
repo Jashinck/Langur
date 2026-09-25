@@ -164,6 +164,12 @@ langur:
   #     sensitive-namespaces: []                            # 缺省空（不启用）；示例：[legal-contracts, code]
   #     local-base-url: ""                                  # 自部署判定端点；敏感命中且缺 local → fail-closed 规则兜底
   #     local-model: ""                                     # 留空复用 decision.model
+  # R0 RSI 回放验证底座（langur.rsi.*）：默认关闭（RSI 暂停态，P11）。开启后仅装配离线反事实回放——
+  # ReplayEngine 加载历史轨迹 + 录制的 Jev 判定，注入候选策略（阈值/强制路由）离线重算分流（绝不联网，C2/DD12），
+  # 采集 V 指标并与基线对比：劣化即拒绝、放松审批闸门即拒绝（只收紧红线 P12②）。回放通过≠生效——候选仅是提案，
+  # 生效须经 R-G 灰度 + 高危人审（R3/R4/R5 落地后接入）。关闭时不产任何 RSI Bean，行为与既有版本一致。
+  # rsi:
+  #   enabled: false                                        # 总开关（缺省 false，RSI 暂停）
   # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
   # 叠加“分步/规划/多步”等特征则升为 HYBRID（Workflow→PlanAndExecute→ReAct 三层）。

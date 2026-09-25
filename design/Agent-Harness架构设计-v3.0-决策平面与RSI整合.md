@@ -264,6 +264,8 @@ Phase 2（M4/M5）：
   R-G 统辖：Jev 对安全恒 advisory，阈值变更即提案（C4）
 ```
 
+> **✅ 落地说明（R0，2026-09-26）**：Phase 1 首项 **R0 回放验证引擎已落地**（N3 起步）。domain 纯 JDK 新增 `harness/rsi` 包：`ReplayEngine`（无状态、无副作用、**不持有 `DecisionPort`**——结构性排除实时判定调用，兑现 C2"回放走录制而非联网"）在 `Trajectory`（按轮 `TrajectoryStep` 成本 + 录制 `RecordedDecision`，含 `DecisionAnswer`/`ThresholdCategory`/`baselineRoute`）上做**确定性反事实重放**：以候选 `ReplayCandidate`（阈值覆盖 / 按 key 强制路由）经域内 `ReplayRoute.fromAnswer`（镜像 infra `ThresholdRouter.route`，遵 P2 不 import infra）重算分流，与基线对比产出 `BaselineComparison`（IMPROVED/NEUTRAL/DEGRADED + deltas + rejected）。**诚实成本模型**：候选只能移除成本（SKIP/TERMINATE），不展开未录制轮次，故生成级候选（PROMPT/SKILL/PARAMS）离线复现基线 → NEUTRAL。**P11/P12 红线编码进裁定**：放松审批闸门（APPROVAL_AUTO 保守→非保守）/ 丢失成功 / 抬高成本 → DEGRADED 拒绝（只收紧不放松）；**回放通过≠生效**（候选仅提案，生效待 R-G 灰度+高危人审）。infra `InMemoryTrajectoryRepository` + `RsiProperties`（`langur.rsi.enabled` 默认 false，暂停态）；start `RsiConfiguration`（`@ConditionalOnProperty` 无 matchIfMissing → 默认 back-off，行为等价既有版本）。14 测全绿（domain 9 无 Mockito + infra 3 + start 2）+ 双冒烟 UP。C2 与 J2 的 live 录制对接（按真实 taskId 落轨迹）为后续增量。
+
 ---
 
 ## 5. 架构落地（DDD 映射，遵循 P1/P2/P9/P10）
@@ -272,9 +274,9 @@ Phase 2（M4/M5）：
 
 | 模块 | 新增 | 依赖约束 |
 |------|------|----------|
-| **langur-domain** | `port/DecisionPort`；`harness/decision/{DecisionRequest, DecisionQuestion, DecisionType, DecisionResponse, DecisionAnswer, DecisionThresholds}`（纯值对象） | 仅 common+lombok（P1）✅ |
-| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter, DataResidencyDecisionPort}`；`DecisionProperties` | 实现 domain 端口（P3）✅ 已落地（J1/J2/J3，2026-09-26） |
-| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关 | 装配 ✅ 已落地（J3，2026-09-26） |
+| **langur-domain** | `port/DecisionPort`；`harness/decision/{DecisionRequest, DecisionQuestion, DecisionType, DecisionResponse, DecisionAnswer, DecisionThresholds}`（纯值对象）；**（R0）** `harness/rsi/{ReplayEngine, Trajectory, TrajectoryStep, RecordedDecision, ReplayRoute, ThresholdCategory, ReplayCandidate, CandidateKind, ReplayMetrics, BaselineComparison, TrajectoryRepository(port)}` | 仅 common+lombok（P1）✅ |
+| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter, DataResidencyDecisionPort}`；`DecisionProperties`；**（R0）** `harness/rsi/{InMemoryTrajectoryRepository, RsiProperties}` | 实现 domain 端口（P3）✅ 已落地（J1/J2/J3 + R0，2026-09-26） |
+| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关；**（R0）** `RsiConfiguration`：装配 `ReplayEngine` + 缺省内存轨迹仓库，默认关 | 装配 ✅ 已落地（J3 + R0，2026-09-26） |
 | **langur-common** | （可选）`spi/DecisionEngineSPI` 若尚未独立成形，在此定型契约 | 零 Spring |
 
 ### 5.2 装配（装饰链，默认关闭 P10）
