@@ -23,6 +23,9 @@ public class RsiProperties {
     /** R1 反思自检配置（{@code langur.rsi.reflection.*}，RsiProperties/ReflectionHook 共用）。 */
     private Reflection reflection = new Reflection();
 
+    /** R2 记忆自蒸馏配置（{@code langur.rsi.distillation.*}，RsiProperties/RsiConfiguration 共用）。 */
+    private Distillation distillation = new Distillation();
+
     /**
      * R1 反思自检（RSI L1，{@code langur.rsi.reflection.*}）。
      * <p>{@code enabled} 默认 {@code false}；需与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
@@ -40,5 +43,31 @@ public class RsiProperties {
 
         /** M5 自我批评提示词；留空用缺省中文反思提示词。 */
         private String critiqueSystemPrompt = "";
+    }
+
+    /**
+     * R2 记忆自蒸馏配置（RSI L2，{@code langur.rsi.distillation.*}）。
+     * <p>{@code enabled} 默认 {@code false}；与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
+     * {@code MemoryDistiller}。{@code minConfidence} 为 Jev 置信门——轨迹录制判定置信均值低于它则不入蒸馏；
+     * {@code dedupThreshold} 为语义去重阈值（cosine）；{@code llmEnabled} 决定用 M5/M6 大模型归纳还是
+     * 确定性模板提炼（缺省模板，离线零网络）。</p>
+     */
+    @Data
+    public static class Distillation {
+
+        /** 蒸馏装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
+        private boolean enabled = false;
+
+        /** Jev 置信门阈值（0..1）：低置信轨迹不入蒸馏（不污染 L4）。 */
+        private double minConfidence = 0.85;
+
+        /** 语义去重阈值（0..1）：目标命名空间近邻相似度达此值判重复拒绝。 */
+        private double dedupThreshold = 0.95;
+
+        /** 蒸馏命名空间（缺省与业务 knowledge 隔离）。 */
+        private String namespace = "rsi-distilled";
+
+        /** 是否用 M5/M6 大模型归纳（缺省 false=确定性模板，离线零网络）。 */
+        private boolean llmEnabled = false;
     }
 }

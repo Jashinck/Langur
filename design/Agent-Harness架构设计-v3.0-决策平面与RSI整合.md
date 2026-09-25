@@ -268,6 +268,8 @@ Phase 2（M4/M5）：
 
 > **✅ 落地说明（R1，2026-09-26）**：Phase 1 次项 **R1 反思自检已落地**（C3）。infra `ReflectionHook implements LifecycleHook` 挂 **BEFORE_OUTPUT**（改写型，`order()=5` 先于 H10 内容审核的 10——反思改写先于安全审核，改写后答案仍被 H10 复查，不能绕过安全层 P11/P12），两级反思兑现 C3：① Jev 廉价初筛 `score("answer-quality")`，**质量+置信双达阈（0.85）→ 跳过 M5**；② 仅低质/低置信升级 M5 自我批评（`LlmGateway.complete(ModelRole.REASONING)`）改写 → `MODIFY`，无改动/失败 → `CONTINUE`。**P10 全线降级**：DecisionPort 缺失/异常、M5 失败一律放行原始答案；钩子只 MODIFY 绝不 ABORT（阻断交安全闸门）。配置驱动（P9）：`langur.rsi.reflection.enabled` 默认 false，与总开关 AND 生效；`RsiProperties` 增嵌套 `Reflection`。10 测全绿（infra `ReflectionHookTest`，匿名桩无 Mockito）。**注**：绑定点为 BEFORE_OUTPUT 而非 AFTER_INFERENCE——ReAct 循环丢弃 AFTER_INFERENCE 的 MODIFY 载荷，仅 BEFORE_OUTPUT 的 MODIFY 被 `applyBeforeOutput` 应用。
 
+> **✅ 落地说明（R2，2026-09-26）**：Phase 1 末项 **R2 记忆自蒸馏已落地**，N3 完成。domain `MemoryDistiller`（纯 JDK）四段流水线：① **Jev 置信门**——轨迹录制判定置信均值 < 0.85 整条不入蒸馏（低置信轨迹不污染 L4，兑现 v3.0 C 类增量"蒸馏纳入 Jev 置信信号"）；② **M5/M6 提炼**经 `DistillationExtractor` 端口（`TemplateDistillationExtractor` 确定性模板兜底 / infra `LlmDistillationExtractor` 大模型归纳，P3/P5）；③ **语义去重**——写前对目标命名空间 recall top-1，cosine ≥ 0.95 判 DUPLICATE 拒绝；④ **落 L4**——`VectorMemoryService.remember`，namespace 隔离（缺省 `rsi-distilled`，与业务 `knowledge` 隔离），metadata 携 `confidence` 供召回降权。产物仍是候选提案语义，不直接改执行策略（P11）。配置驱动（P9）：`langur.rsi.distillation.*` 默认关，与总开关 AND。17 测全绿（domain 9 无 Mockito + infra 5 + start 3）。**注**：轨迹仅含 R0 已录制信号（action+判定分流，无观测全文），更富内容蒸馏需 R0 扩字段；"衰减"与离线消费调度留后续。
+
 ---
 
 ## 5. 架构落地（DDD 映射，遵循 P1/P2/P9/P10）
@@ -276,9 +278,9 @@ Phase 2（M4/M5）：
 
 | 模块 | 新增 | 依赖约束 |
 |------|------|----------|
-| **langur-domain** | `port/DecisionPort`；`harness/decision/{DecisionRequest, DecisionQuestion, DecisionType, DecisionResponse, DecisionAnswer, DecisionThresholds}`（纯值对象）；**（R0）** `harness/rsi/{ReplayEngine, Trajectory, TrajectoryStep, RecordedDecision, ReplayRoute, ThresholdCategory, ReplayCandidate, CandidateKind, ReplayMetrics, BaselineComparison, TrajectoryRepository(port)}` | 仅 common+lombok（P1）✅ |
-| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter, DataResidencyDecisionPort}`；`DecisionProperties`；**（R0）** `harness/rsi/{InMemoryTrajectoryRepository, RsiProperties}`；**（R1）** `harness/rsi/ReflectionHook`（BEFORE_OUTPUT 改写型钩子，order=5 先于 H10） | 实现 domain 端口（P3）✅ 已落地（J1/J2/J3 + R0/R1，2026-09-26） |
-| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关；**（R0）** `RsiConfiguration`：装配 `ReplayEngine` + 缺省内存轨迹仓库，默认关 | 装配 ✅ 已落地（J3 + R0，2026-09-26） |
+| **langur-domain** | `port/DecisionPort`；`harness/decision/{DecisionRequest, DecisionQuestion, DecisionType, DecisionResponse, DecisionAnswer, DecisionThresholds}`（纯值对象）；**（R0）** `harness/rsi/{ReplayEngine, Trajectory, TrajectoryStep, RecordedDecision, ReplayRoute, ThresholdCategory, ReplayCandidate, CandidateKind, ReplayMetrics, BaselineComparison, TrajectoryRepository(port)}`；**（R2）** `harness/rsi/{MemoryDistiller, DistillationExtractor(port), TemplateDistillationExtractor, DistilledMemory, DistillKind, DistillationResult}` | 仅 common+lombok（P1）✅ |
+| **langur-infrastructure** | `harness/decision/{TypeSafeDecisionAdapter(WebClient), LocalDecisionAdapter(Kev/Laya), RuleFallbackDecisionAdapter}`；`{RecordingDecisionPort, CachingDecisionPort, ThresholdRouter, DataResidencyDecisionPort}`；`DecisionProperties`；**（R0）** `harness/rsi/{InMemoryTrajectoryRepository, RsiProperties}`；**（R1）** `harness/rsi/ReflectionHook`（BEFORE_OUTPUT 改写型钩子，order=5 先于 H10）；**（R2）** `harness/rsi/LlmDistillationExtractor`（M5/M6 归纳，回退模板） | 实现 domain 端口（P3）✅ 已落地（J1/J2/J3 + R0/R1/R2，2026-09-26） |
+| **langur-start** | `DecisionConfiguration`：经 `ObjectProvider` 组装"录制→缓存→阈值→后端→兜底"装饰链；默认关；**（R0）** `RsiConfiguration`：装配 `ReplayEngine` + 缺省内存轨迹仓库，默认关；**（R2）** `RsiConfiguration` 增 `distillationExtractor` + `memoryDistiller`（`langur.rsi.distillation.enabled` 另行开启） | 装配 ✅ 已落地（J3 + R0/R1/R2，2026-09-26） |
 | **langur-common** | （可选）`spi/DecisionEngineSPI` 若尚未独立成形，在此定型契约 | 零 Spring |
 
 ### 5.2 装配（装饰链，默认关闭 P10）
