@@ -15,6 +15,7 @@ import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
 import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesisValidator;
 import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesizer;
 import org.skylark.langur.infrastructure.harness.rsi.SynthesizedSkillRegistrar;
+import org.skylark.langur.infrastructure.harness.rsi.ToolExtensionRegistrar;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,5 +133,13 @@ public class RsiConfiguration {
     public StrategyOptimizer strategyOptimizer(ReplayEngine replayEngine) {
         log.info("[RSI] assembling R4 strategy optimizer (replay bandit + threshold tuning + auto-rollback)");
         return new StrategyOptimizer(replayEngine);
+    }
+
+    /** 工具自扩展注册器（R5）：缺口候选 + SSRF/人审护栏 + 注册中心落库。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.extension.enabled", havingValue = "true")
+    public ToolExtensionRegistrar toolExtensionRegistrar() {
+        log.info("[RSI] assembling R5 tool extension registrar (SSRF guard + human approval)");
+        return new ToolExtensionRegistrar();
     }
 }
