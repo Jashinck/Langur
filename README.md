@@ -1,7 +1,17 @@
 # Langur Agent-Harness — 叶猴 Agent 能力框架
 
 > **Langur** 是一套企业级 Agent-Harness 框架——大模型的操作系统与安全沙箱层，以叶猴（Langur）命名，轻盈而敏捷。
-> 基于 DDD 六边形架构，六组件正交设计，支持 ReAct / PlanAndExecute / Workflow / Hybrid 多范式执行、工具调用、Jev 决策平面与递归自我改进（RSI）。
+> 基于 DDD 六边形架构（6 Maven 模块）+ 六组件正交设计，支持 ReAct / PlanAndExecute / Workflow / Hybrid 多范式执行。
+
+## 三大架构哲学
+
+> **大模型写，决策平面判，Harness 管，RSI 进化。**
+
+| 哲学 | 一句话内核 | 解决什么 |
+|------|-----------|----------|
+| **Harness** · 确定性调度底座 | 模型负责写，Harness 负责管 | 概率性模型输出如何被确定性约束（权限/预算/合规/可回滚） |
+| **Jev** · 判定式决策平面 | 大模型写，决策平面判（判定/生成分离，P12） | 路由/闸门/评分/分类等"判定"如何快、廉、校准、可批量 |
+| **RSI** · 递归自我演进 | 自我改进 ≠ 自我失控（P11） | Agent 如何用自身运行数据持续改进自身且不失控 |
 
 ---
 
@@ -51,7 +61,7 @@
 - **C（Context）**：双画像 + 四级记忆 + 脱敏过滤 + Token 预算
 - **S（State）**：任务状态快照、断点续跑、分布式锁、幂等
 - **L（Lifecycle）**：钩子引擎，BEFORE/AFTER 各拦截点
-- **V（Evaluation）**：四维指标上报 + 审计留痕
+- **V（Evaluation）**：五维指标上报 + 审计留痕
 - **决策平面**：J1–J10 落地，对安全/审批闸门恒 advisory、只收紧不放松（P12）
 
 ### DDD 六边形分层（6 Maven 模块）
@@ -74,7 +84,7 @@ langur/
 
 ![Jev 决策平面（System-1 判定层）](doc/share/images/langur-jev-decision-plane.png)
 
-> 判定/生成分离（P12）：Jev 只产类型化判定（choice/probability/score + 置信度），对安全/审批闸门恒 advisory、只收紧不放松；10 个执行插入点详见 [v2.0 架构设计](doc/design/Agent-Harness架构设计-v2.0.md)。
+> 判定/生成分离（P12）：Jev 只产类型化判定（choice/probability/score + 置信度），对安全/审批闸门恒 advisory、只收紧不放松；10 个执行插入点详见 [架构设计](doc/design/Agent-Harness架构设计.md)。
 
 ### RSI 递归自我改进（R0–R5/R-G）
 
@@ -86,12 +96,13 @@ langur/
 
 ## 里程碑
 
-| 版本 | 里程碑 | 内容 | 状态 |
+| 哲学 | 里程碑 | 内容 | 状态 |
 |------|--------|------|------|
-| **v1.0** | H1–H10 / H13 / H14 | 六组件补全（Token 计量 / 语义 Embedding / PlanAndExecute / Redis 热层 / 可观测 / MCP / REST 工具 / Skill 编排 / Workflow+Hybrid / 安全补强）、统一模型网关（配置工厂 + GLM + 降级修复 + SecretResolver + Provider 熔断）、可插拔向量库（端口扩展 + ES/Milvus/pgvector + 原生混合检索） | ✅ 已完成 |
-| **v2.0** | J1–J10 / R0–R5 / H11 / H12 | 决策平面（Jev 判定层 + 10 插入点）、RSI 递归自我改进（回放/反思/蒸馏/技能合成/安全平面/策略调优/工具自扩展）、依赖治理、多 Agent | ✅ 已完成 |
+| **Harness** | H1–H14 + H11 / H12 | 六组件补全（Token 计量 / 语义 Embedding / PlanAndExecute / Redis 热层 / 可观测 / MCP / REST 工具 / Skill 编排 / Workflow+Hybrid / 安全补强）、统一模型网关（配置工厂 + GLM + 降级修复 + SecretResolver + Provider 熔断）、可插拔向量库（端口扩展 + ES/Milvus/pgvector + 原生混合检索）、依赖治理、多 Agent | ✅ 已完成 |
+| **Jev** | J1–J10 | 决策平面（DecisionPort 契约 / Jev 后端 / 录制·缓存·阈值·驻留装饰链 / 十插入点） | ✅ 已完成 |
+| **RSI** | R0–R5 / R-G | 回放验证 / 反思自检 / 记忆自蒸馏 / 技能自合成 / 安全平面 / 策略自优化 / 工具自扩展 | ✅ 已完成 |
 
-完整设计见 `doc/design/`：v1.0 通用能力底座、v2.0 决策平面与 RSI（RoadMap 已并入对应版本设计文档）。
+完整设计见 [架构设计](doc/design/Agent-Harness架构设计.md)：三大架构哲学 + 实践方法论，RoadMap 已并入。
 
 ---
 
@@ -193,7 +204,7 @@ langur:
     hybrid: { enabled: false, mode: native, fusion: RRF }
 ```
 
-### 决策平面 + RSI（v2.0，默认关）
+### 决策平面 + RSI（默认关）
 
 ```yaml
 langur:
@@ -217,7 +228,7 @@ langur:
 ## 文档
 
 ```
-doc/design/   # 架构设计文档：v1.0 通用能力底座、v2.0 决策平面与 RSI
+doc/design/   # 架构设计知识文档：Harness · Jev · RSI 三大架构哲学 + 实践方法论
 doc/share/    # 公众号分享博文（含自包含 HTML）
 ```
 
