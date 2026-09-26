@@ -1,9 +1,0 @@
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/config/RsiConfigurationTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/config/ArchitectureGuardTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/config/VectorDimensionGuardTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/application/AgentApplicationServiceTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/api/governance/GovernanceFilterTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/api/governance/CacheIdempotencyStoreTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/api/governance/CacheRateLimiterTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/config/PgVectorDataSourceConfigurationTest.java
-/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-start/src/test/java/org/skylark/langur/config/DecisionConfigurationTest.java
