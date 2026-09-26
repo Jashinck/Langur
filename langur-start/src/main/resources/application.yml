@@ -188,6 +188,8 @@ langur:
   #     max-depth: 3                                        #   递归深度上限（自改进链深度超此值拒绝）
   #     max-proposals-per-minute: 10                        #   变更频率限流（滑动 60s 窗口内最大提案数）
   #     forbidden-target-prefixes: [security.policy, validation.]  # 权限隔离红线：禁止改动的目标前缀（安全策略层/四层校验链）
+  #   optimization:                                         # R4 策略自优化（RSI L4→D3，StrategyOptimizer，回放择优+阈值提案+自动回滚）
+  #     enabled: false                                      #   分开关（缺省 false；与总开关 AND 后生效）
   #   # 反思只在总开关+分开关均开时装配；order=5 先于 H10 内容审核(order=10)——改写后的答案仍被 H10 复查，反思不能绕过安全层（P11/P12）
   # H9+ 配置驱动的顶层工作流定义（P9）：为 bizCode 注册确定性阶段序列，使 WORKFLOW/HYBRID 多阶段编排可运行。
   # 凡在此注册了定义的 bizCode，DefaultLayerRouter 一律视为 Workflow 信号（无需命名约定）；
