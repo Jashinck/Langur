@@ -1,6 +1,6 @@
 # Langur Agent-Harness — 叶猴 Agent 能力框架
 
-> **Langur** 是 [Skylark](https://github.com/Jashinck/Skylark) 生态中的通用 Agent-Harness 框架，以叶猴（Langur）命名，轻盈而敏捷。
+> **Langur** 是一套企业级 Agent-Harness 框架——大模型的操作系统与安全沙箱层，以叶猴（Langur）命名，轻盈而敏捷。
 > 基于 DDD 六边形架构，六组件正交设计，支持 ReAct / PlanAndExecute / Workflow / Hybrid 多范式执行、工具调用、Jev 决策平面与递归自我改进（RSI）。
 
 ---
@@ -14,7 +14,7 @@
 | **上下文** | 四级分层记忆（L1 瞬时 / L2 会话 / L3 任务 / L4 向量知识）+ 语义召回 + Token 预算治理 |
 | **状态** | 快照断点续跑、分布式锁防重入、幂等键、Redis 热层 |
 | **生命周期** | 钩子引擎（HookPoint 拦截 + ABORT/SKIP/MODIFY），安全注入/输出审核/高危人审挂点 |
-| **可观测** | 四维指标（SCHEDULING/TOOL/MODEL/SECURITY/DECISION）→ Prometheus + MQ 审计 + 分级告警 |
+| **可观测** | 五维指标（SCHEDULING/TOOL/MODEL/SECURITY/DECISION）→ Prometheus + MQ 审计 + 分级告警 |
 | **模型网关** | 统一 `LlmGateway`（角色→模型 + 主备降级 + Provider 熔断），配置化接入 OpenAI/Claude/Gemini/DeepSeek/Qwen/GLM |
 | **向量库** | 可插拔 `VectorStore`（memory/pgvector/Elasticsearch/Milvus），原生混合检索（RRF/加权）+ 应用侧兜底 |
 | **决策平面** | `DecisionPort`（Jev 判定模型：choice/probability/score + 置信度），装饰链（录制 ⊃ 缓存 ⊃ 阈值 ⊃ 后端 ⊃ 兜底），10 个执行插入点 |
@@ -25,6 +25,10 @@
 ---
 
 ## 架构
+
+### 全局架构
+
+![Langur 全局架构](doc/share/images/langur-global-architecture.png)
 
 ### 六组件正交 + 决策平面横切
 
@@ -39,6 +43,8 @@
 │执行  │   │工具  │   │上下文│   │状态  │   │生命周期│  │可观测│
 └──────┘   └──────┘   └──────┘   └──────┘   └──────┘   └──────┘
 ```
+
+![Harness 六要素（正交组件）](doc/share/images/langur-harness-six-components.png)
 
 - **E（Execution）**：ReAct / PlanAndExecute / Workflow / Hybrid 四范式，终止闸门 + 循环检测
 - **T（Tool）**：统一工具注册中心 + 四层校验链（权限/风险/白名单/限流）
@@ -60,19 +66,32 @@ langur/
 └── langur-start/            # 启动装配层：Spring 配置、application.yml
 ```
 
+![DDD 六边形分层（6 Maven 模块）](doc/share/images/langur-ddd-hexagonal.png)
+
 依赖方向（P2 单向无环）：`start → api → application → domain ← infrastructure`；`domain` 不 import Spring/infrastructure（ArchUnit 守护）。
+
+### 决策平面（System-1 判定层）
+
+![Jev 决策平面（System-1 判定层）](doc/share/images/langur-jev-decision-plane.png)
+
+> 判定/生成分离（P12）：Jev 只产类型化判定（choice/probability/score + 置信度），对安全/审批闸门恒 advisory、只收紧不放松；10 个执行插入点详见 [v2.0 架构设计](doc/design/Agent-Harness架构设计-v2.0.md)。
+
+### RSI 递归自我改进（R0–R5/R-G）
+
+![RSI 递归自我改进（安全平面统辖）](doc/share/images/langur-rsi-self-improvement.png)
+
+> Observe→Evaluate→Propose→Validate→Apply→Monitor 元循环；每个产物都是"候选提案"，经回放验证 + R-G 安全平面 + 灰度 + 高危人审才生效（P11/P12）。
 
 ---
 
-## RoadMap 里程碑
+## 里程碑
 
 | 版本 | 里程碑 | 内容 | 状态 |
 |------|--------|------|------|
-| **2.0** | H1–H10 | 六组件补全：Token 计量 / 语义 Embedding / PlanAndExecute / Redis 热层 / 可观测 / MCP / REST 工具 / Skill 编排 / Workflow+Hybrid / 安全补强 | ✅ 已完成 |
-| **2.1** | H13 / H14（G1→G3） | 统一模型网关（配置工厂 + GLM + 降级修复 + SecretResolver + Provider 熔断）、可插拔向量库（端口扩展 + ES/Milvus/pgvector + 原生混合检索） | ✅ 已完成 |
-| **3.0** | J1–J10 / R0–R5 / H11 / H12（D1→D3） | 决策平面（Jev 判定层 + 10 插入点）、RSI 递归自我改进（回放/反思/蒸馏/技能合成/安全平面/策略调优/工具自扩展）、依赖治理、多 Agent | ✅ 已完成 |
+| **v1.0** | H1–H10 / H13 / H14 | 六组件补全（Token 计量 / 语义 Embedding / PlanAndExecute / Redis 热层 / 可观测 / MCP / REST 工具 / Skill 编排 / Workflow+Hybrid / 安全补强）、统一模型网关（配置工厂 + GLM + 降级修复 + SecretResolver + Provider 熔断）、可插拔向量库（端口扩展 + ES/Milvus/pgvector + 原生混合检索） | ✅ 已完成 |
+| **v2.0** | J1–J10 / R0–R5 / H11 / H12 | 决策平面（Jev 判定层 + 10 插入点）、RSI 递归自我改进（回放/反思/蒸馏/技能合成/安全平面/策略调优/工具自扩展）、依赖治理、多 Agent | ✅ 已完成 |
 
-设计文档见 `design/`（RoadMap 2.0/2.1/3.0 + 对应架构设计）。
+完整设计见 `doc/design/`：v1.0 通用能力底座、v2.0 决策平面与 RSI（RoadMap 已并入对应版本设计文档）。
 
 ---
 
@@ -174,7 +193,7 @@ langur:
     hybrid: { enabled: false, mode: native, fusion: RRF }
 ```
 
-### 决策平面 + RSI（v3.0，默认关，P11 暂停态）
+### 决策平面 + RSI（v2.0，默认关）
 
 ```yaml
 langur:
@@ -198,9 +217,8 @@ langur:
 ## 文档
 
 ```
-design/    # 设计文档（RoadMap + 架构设计 + 决策/实现审计）
-doc/       # 技术分享与总结
-share/     # 公众号分享博文
+doc/design/   # 架构设计文档：v1.0 通用能力底座、v2.0 决策平面与 RSI
+doc/share/    # 公众号分享博文（含自包含 HTML）
 ```
 
 ---
