@@ -14,7 +14,6 @@ import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.dto.AgentResult;
 import org.skylark.langur.application.service.AgentApplicationService;
 import org.skylark.langur.application.service.AgentRunTaskApplicationService;
-import org.skylark.langur.domain.model.message.MessagePartType;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -106,7 +105,7 @@ public class AgentV1Controller {
         }
         return parts.stream()
                 .map(part -> MessagePartInput.builder()
-                        .type(MessagePartType.fromValue(part.getType()))
+                        .type(part.getType())
                         .content(part.getContent())
                         .mediaUrl(part.getMediaUrl())
                         .build())

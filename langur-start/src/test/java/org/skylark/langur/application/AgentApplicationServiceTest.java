@@ -17,7 +17,6 @@ import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
 import org.skylark.langur.domain.model.agent.AgentStatus;
-import org.skylark.langur.domain.model.message.MessagePartType;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.model.tool.ToolDefinition;
 import org.skylark.langur.domain.model.tool.ToolResult;
@@ -128,8 +127,8 @@ class AgentApplicationServiceTest {
                 RunAgentCommand.builder()
                         .agentId(created.getId())
                         .messageParts(List.of(
-                                MessagePartInput.builder().type(MessagePartType.TEXT).content("你好").build(),
-                                MessagePartInput.builder().type(MessagePartType.IMAGE).mediaUrl("https://img").build()))
+                                MessagePartInput.builder().type("text").content("你好").build(),
+                                MessagePartInput.builder().type("image").mediaUrl("https://img").build()))
                         .build());
 
         assertEquals("COMPLETED", result.getStatus());

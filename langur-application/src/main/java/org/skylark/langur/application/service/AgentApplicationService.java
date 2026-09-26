@@ -307,7 +307,9 @@ public class AgentApplicationService {
     }
 
     private String toTextLine(MessagePartInput part) {
-        MessagePartType type = part.getType() != null ? part.getType() : MessagePartType.TEXT;
+        MessagePartType type = part.getType() != null && !part.getType().isBlank()
+                ? MessagePartType.fromValue(part.getType())
+                : MessagePartType.TEXT;
         if (type == MessagePartType.TEXT) {
             return StringUtils.defaultString(part.getContent());
         }

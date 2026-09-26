@@ -8,7 +8,6 @@ import org.skylark.langur.application.command.MessagePartInput;
 import org.skylark.langur.application.command.RunAgentCommand;
 import org.skylark.langur.application.stream.AgentStreamApplicationService;
 import org.skylark.langur.application.stream.StreamEventHandler;
-import org.skylark.langur.domain.model.message.MessagePartType;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -80,7 +79,7 @@ public class AgentStreamV1Controller {
         }
         return parts.stream()
                 .map(part -> MessagePartInput.builder()
-                        .type(MessagePartType.fromValue(part.getType()))
+                        .type(part.getType())
                         .content(part.getContent())
                         .mediaUrl(part.getMediaUrl())
                         .build())
