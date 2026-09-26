@@ -25,6 +25,8 @@ public class LlmProperties {
     private Map<String, String> roleModels = new HashMap<>();
     /** T15 降级链：主模型名 → 备用模型名列表（主不可用时按序降级）。 */
     private Map<String, List<String>> fallbackChains = new HashMap<>();
+    /** H13.7 provider 熔断配置（{@code langur.llm.circuit-breaker.*}）。 */
+    private CircuitBreaker circuitBreaker = new CircuitBreaker();
 
     public ProviderProperties getProvider(String provider) {
         return providers.getOrDefault(provider, new ProviderProperties());
@@ -32,6 +34,29 @@ public class LlmProperties {
 
     public List<String> fallbacksOf(String model) {
         return fallbackChains.getOrDefault(model, List.of());
+    }
+
+    /**
+     * 模型 → provider 名解析（H13.7 熔断隔离键）：先精确匹配 provider 默认模型，再按
+     * {@code model-prefixes}（H13.3）前缀匹配；未知模型回退以模型名自身作隔离键。
+     */
+    public String providerOf(String model) {
+        if (model == null || model.isBlank()) {
+            return defaultProvider;
+        }
+        for (Map.Entry<String, ProviderProperties> entry : providers.entrySet()) {
+            if (model.equals(entry.getValue().getModel())) {
+                return entry.getKey();
+            }
+        }
+        for (Map.Entry<String, ProviderProperties> entry : providers.entrySet()) {
+            for (String prefix : entry.getValue().getModelPrefixes()) {
+                if (prefix != null && !prefix.isBlank() && model.startsWith(prefix)) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return model;
     }
 
     /**
@@ -59,5 +84,17 @@ public class LlmProperties {
         public boolean enabledOrDefault(boolean defaultValue) {
             return enabled == null ? defaultValue : enabled;
         }
+    }
+
+    /** H13.7 provider 熔断配置（{@code langur.llm.circuit-breaker.*}，缺省启用——仅连续失败后快速降级，无失败时零影响）。 */
+    @Getter
+    @Setter
+    public static class CircuitBreaker {
+        /** 是否启用 provider 熔断（缺省 true）。 */
+        private boolean enabled = true;
+        /** 连续失败达此阈值即跳闸（缺省 3）。 */
+        private int threshold = 3;
+        /** 跳闸冷却秒数（期内快速降级，冷却后放行试探，缺省 30）。 */
+        private long cooldownSeconds = 30;
     }
 }

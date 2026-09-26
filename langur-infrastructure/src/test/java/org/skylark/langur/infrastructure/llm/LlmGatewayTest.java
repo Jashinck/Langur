@@ -102,4 +102,40 @@ class LlmGatewayTest {
         // 流式默认降级为一次性产出（FakePort 未覆写 streamComplete）
         assertTrue(sb.length() > 0);
     }
+
+    @Test
+    void shouldCircuitBreakPrimaryAfterRepeatedFailures() {
+        LlmProperties props = baseProperties();
+        props.getRoleModels().put("REASONING", "bad-primary");
+        props.getFallbackChains().put("bad-primary", List.of("good-backup"));
+        FakePort port = new FakePort();
+        LlmGateway gateway = new LlmGateway(port, props);
+
+        // 连续 3 次失败 → 主模型熔断跳闸
+        for (int i = 0; i < 3; i++) {
+            assertEquals("ok:good-backup", gateway.complete(ModelRole.REASONING, "sys", "u"));
+        }
+        int callsBefore = port.calledModels.size();
+
+        // 第 4 次：主模型被快速跳过，只调用备用模型
+        assertEquals("ok:good-backup", gateway.complete(ModelRole.REASONING, "sys", "u"));
+        assertEquals(callsBefore + 1, port.calledModels.size(), "熔断后跳过主模型，仅调用备用");
+        assertEquals("good-backup", port.calledModels.get(port.calledModels.size() - 1));
+    }
+
+    @Test
+    void shouldNotCircuitBreakWhenDisabled() {
+        LlmProperties props = baseProperties();
+        props.getRoleModels().put("REASONING", "bad-primary");
+        props.getFallbackChains().put("bad-primary", List.of("good-backup"));
+        props.getCircuitBreaker().setEnabled(false);
+        FakePort port = new FakePort();
+        LlmGateway gateway = new LlmGateway(port, props);
+
+        for (int i = 0; i < 5; i++) {
+            assertEquals("ok:good-backup", gateway.complete(ModelRole.REASONING, "sys", "u"));
+        }
+        // 熔断关闭 → 每次仍尝试主模型（5 次 × 主+备 = 10）
+        assertEquals(10, port.calledModels.size());
+    }
 }
