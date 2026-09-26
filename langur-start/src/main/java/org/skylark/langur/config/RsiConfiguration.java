@@ -3,8 +3,11 @@ package org.skylark.langur.config;
 import org.skylark.langur.domain.harness.rsi.DistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.MemoryDistiller;
 import org.skylark.langur.domain.harness.rsi.ReplayEngine;
+import org.skylark.langur.domain.harness.rsi.RsiProposalRepository;
+import org.skylark.langur.domain.harness.rsi.RsiSafetyPlane;
 import org.skylark.langur.domain.harness.rsi.TemplateDistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
+import org.skylark.langur.infrastructure.harness.rsi.InMemoryRsiProposalRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryTrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.LlmDistillationExtractor;
 import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
@@ -21,13 +24,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * RSI 装配（R0/R2/R3，start）。<b>默认关闭</b>（P10/P11）：{@code langur.rsi.enabled=false}（或缺省）时整个
+ * RSI 装配（R0/R2/R3/R-G，start）。<b>默认关闭</b>（P10/P11）：{@code langur.rsi.enabled=false}（或缺省）时整个
  * {@code @Configuration} 因 {@link ConditionalOnProperty} back-off，不产出任何 Bean，系统行为与既有版本完全一致。
- * <p>开启后装配 R0 <b>离线回放验证底座</b>（{@link ReplayEngine} + {@link TrajectoryRepository}）、R2
- * <b>记忆自蒸馏</b>（{@link MemoryDistiller}，经 {@code langur.rsi.distillation.enabled} 另行开启）与 R3
- * <b>技能自合成</b>（{@link SkillSynthesizer} + {@link SkillSynthesisValidator} + {@link SynthesizedSkillRegistrar}，
- * 经 {@code langur.rsi.synthesis.enabled} 另行开启）。产物都是 RSI 候选提案，须经 R0 回放 + R-G 灰度 + 高危人审
- * 方可生效（P11 红线：回放通过≠生效）。</p>
+ * <p>开启后装配 R0 回放底座、R2 记忆自蒸馏、R3 技能自合成、R-G 安全平面（均另行分开关）。产物都是 RSI 候选提案，
+ * 须经 R0 回放 + R-G 三段式（验证 + 高危人审 + 灰度）方可生效（P11 红线：回放通过≠生效）。</p>
  */
 @Configuration
 @ConditionalOnProperty(name = "langur.rsi.enabled", havingValue = "true")
@@ -101,5 +101,27 @@ public class RsiConfiguration {
     public SynthesizedSkillRegistrar synthesizedSkillRegistrar() {
         log.info("[RSI] assembling R3 synthesized skill registrar (versioned + rollback)");
         return new SynthesizedSkillRegistrar();
+    }
+
+    /** RSI 提案仓库（R-G，缺省内存实现；生产可覆盖 JPA，P5 开闭）。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.governance.enabled", havingValue = "true")
+    @ConditionalOnMissingBean(RsiProposalRepository.class)
+    public RsiProposalRepository rsiProposalRepository() {
+        return new InMemoryRsiProposalRepository();
+    }
+
+    /** RSI 安全平面（R-G，P0）：提案-验证-应用三段式 + 红线/深度/频率/人审护栏。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.governance.enabled", havingValue = "true")
+    public RsiSafetyPlane rsiSafetyPlane(RsiProposalRepository repository, RsiProperties properties) {
+        log.info("[RSI] assembling R-G safety plane (maxDepth={}, maxProposalsPerMinute={}, forbidden={})",
+                properties.getGovernance().getMaxDepth(),
+                properties.getGovernance().getMaxProposalsPerMinute(),
+                properties.getGovernance().getForbiddenTargetPrefixes());
+        return new RsiSafetyPlane(repository,
+                properties.getGovernance().getMaxDepth(),
+                properties.getGovernance().getMaxProposalsPerMinute(),
+                properties.getGovernance().getForbiddenTargetPrefixes());
     }
 }

@@ -3,8 +3,11 @@ package org.skylark.langur.config;
 import org.junit.jupiter.api.Test;
 import org.skylark.langur.domain.harness.rsi.MemoryDistiller;
 import org.skylark.langur.domain.harness.rsi.ReplayEngine;
+import org.skylark.langur.domain.harness.rsi.RsiProposalRepository;
+import org.skylark.langur.domain.harness.rsi.RsiSafetyPlane;
 import org.skylark.langur.domain.harness.rsi.TemplateDistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
+import org.skylark.langur.infrastructure.harness.rsi.InMemoryRsiProposalRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryTrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
 import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesisValidator;
@@ -18,9 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
- * R0/R2/R3 验收 - {@link RsiConfiguration} 装配离线单测（直接调用 Bean 工厂方法 + 注解断言）。
+ * R0/R2/R3/R-G 验收 - {@link RsiConfiguration} 装配离线单测（直接调用 Bean 工厂方法 + 注解断言）。
  * <p>验收点：默认关闭（{@code @ConditionalOnProperty} 无 matchIfMissing，enabled=false 时整个配置类 back-off
- * 不产 Bean，P10/P11 RSI 暂停态）；开启后装配 R0 回放底座、R2 蒸馏、R3 技能自合成（均另行分开关）。</p>
+ * 不产 Bean，P10/P11 RSI 暂停态）；开启后装配 R0 回放底座、R2 蒸馏、R3 技能自合成、R-G 安全平面（均另行分开关）。</p>
  */
 class RsiConfigurationTest {
 
@@ -38,6 +41,7 @@ class RsiConfigurationTest {
         assertFalse(new RsiProperties().getReflection().isEnabled(), "R1 反思默认关闭");
         assertFalse(new RsiProperties().getDistillation().isEnabled(), "R2 蒸馏默认关闭");
         assertFalse(new RsiProperties().getSynthesis().isEnabled(), "R3 合成默认关闭");
+        assertFalse(new RsiProperties().getGovernance().isEnabled(), "R-G 安全平面默认关闭");
     }
 
     @Test
@@ -92,5 +96,25 @@ class RsiConfigurationTest {
     void shouldDefaultSynthesisAllowlistToEmpty() {
         assertFalse(new RsiProperties().getSynthesis().isEnabled());
         assertNotNull(new RsiProperties().getSynthesis().getAllowedToolIds());
+    }
+
+    @Test
+    void shouldAssembleRsiGovernanceBeans() {
+        RsiProperties properties = new RsiProperties();
+        properties.setEnabled(true);
+
+        RsiProposalRepository repository = configuration.rsiProposalRepository();
+        assertInstanceOf(InMemoryRsiProposalRepository.class, repository);
+        assertInstanceOf(RsiSafetyPlane.class, configuration.rsiSafetyPlane(repository, properties));
+    }
+
+    @Test
+    void shouldDefaultGovernancePropertiesToConservativeValues() {
+        RsiProperties.Governance g = new RsiProperties().getGovernance();
+        assertFalse(g.isEnabled());
+        assertEquals(3, g.getMaxDepth());
+        assertEquals(10, g.getMaxProposalsPerMinute());
+        assertNotNull(g.getForbiddenTargetPrefixes());
+        assertFalse(g.getForbiddenTargetPrefixes().isEmpty(), "权限隔离红线缺省应含 security.policy/validation.");
     }
 }
