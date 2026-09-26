@@ -1,0 +1,7 @@
+/langur-start/target/
+/langur-infrastructure/target/
+/langur-domain/target/
+/langur-common/target/
+/langur-application/target/
+/langur-api/target/
+/.idea/
