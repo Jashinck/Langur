@@ -1,5 +1,7 @@
 org/skylark/langur/application/service/AgentRunTaskApplicationService.class
+org/skylark/langur/application/dto/ArtifactResult.class
 org/skylark/langur/application/dto/PlanStepResult.class
+org/skylark/langur/application/dto/ArtifactResult$ArtifactResultBuilder.class
 org/skylark/langur/application/service/ToolRegistryService.class
 org/skylark/langur/application/dto/AgentResult$AgentResultBuilder.class
 org/skylark/langur/application/command/CreateAgentCommand.class

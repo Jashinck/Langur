@@ -6,7 +6,9 @@ org/skylark/langur/common/exception/ToolNotFoundException.class
 org/skylark/langur/common/spi/BizContext.class
 org/skylark/langur/common/exception/AgentNotFoundException.class
 org/skylark/langur/common/exception/LangurException.class
+org/skylark/langur/common/cache/CacheBackend.class
 org/skylark/langur/common/spi/SpiToolSpec.class
+org/skylark/langur/common/cache/DistributedLock.class
 org/skylark/langur/common/spi/BizContext$BizContextBuilder.class
 org/skylark/langur/common/spi/PromptTemplateSPI.class
 org/skylark/langur/common/spi/DecisionEngineSPI.class
