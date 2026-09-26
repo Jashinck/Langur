@@ -35,6 +35,9 @@ public class RsiProperties {
     /** R4 策略自优化配置（{@code langur.rsi.optimization.*}，RsiProperties/RsiConfiguration 共用）。 */
     private Optimization optimization = new Optimization();
 
+    /** R5 工具自扩展配置（{@code langur.rsi.extension.*}，RsiProperties/RsiConfiguration 共用）。 */
+    private Extension extension = new Extension();
+
     /**
      * R1 反思自检（RSI L1，{@code langur.rsi.reflection.*}）。
      * <p>{@code enabled} 默认 {@code false}；需与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
@@ -129,6 +132,18 @@ public class RsiProperties {
     public static class Optimization {
 
         /** 策略自优化装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
+        private boolean enabled = false;
+    }
+
+    /**
+     * R5 工具自扩展配置（RSI L5，{@code langur.rsi.extension.*}）。
+     * <p>{@code enabled} 默认 {@code false}；与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
+     * {@code ToolExtensionRegistrar}（缺口检测 + SSRF/人审护栏 + 注册中心落库）。</p>
+     */
+    @Data
+    public static class Extension {
+
+        /** 工具自扩展装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
         private boolean enabled = false;
     }
 }

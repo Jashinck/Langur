@@ -14,6 +14,7 @@ import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
 import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesisValidator;
 import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesizer;
 import org.skylark.langur.infrastructure.harness.rsi.SynthesizedSkillRegistrar;
+import org.skylark.langur.infrastructure.harness.rsi.ToolExtensionRegistrar;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,6 +45,7 @@ class RsiConfigurationTest {
         assertFalse(new RsiProperties().getSynthesis().isEnabled(), "R3 合成默认关闭");
         assertFalse(new RsiProperties().getGovernance().isEnabled(), "R-G 安全平面默认关闭");
         assertFalse(new RsiProperties().getOptimization().isEnabled(), "R4 策略自优化默认关闭");
+        assertFalse(new RsiProperties().getExtension().isEnabled(), "R5 工具自扩展默认关闭");
     }
 
     @Test
@@ -123,5 +125,10 @@ class RsiConfigurationTest {
     @Test
     void shouldAssembleStrategyOptimizer() {
         assertInstanceOf(StrategyOptimizer.class, configuration.strategyOptimizer(configuration.replayEngine()));
+    }
+
+    @Test
+    void shouldAssembleToolExtensionRegistrar() {
+        assertInstanceOf(ToolExtensionRegistrar.class, configuration.toolExtensionRegistrar());
     }
 }
