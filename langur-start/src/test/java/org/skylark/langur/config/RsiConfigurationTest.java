@@ -7,6 +7,9 @@ import org.skylark.langur.domain.harness.rsi.TemplateDistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryTrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
+import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesisValidator;
+import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesizer;
+import org.skylark.langur.infrastructure.harness.rsi.SynthesizedSkillRegistrar;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,10 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
- * R0/R2 验收 - {@link RsiConfiguration} 装配离线单测（直接调用 Bean 工厂方法 + 注解断言）。
+ * R0/R2/R3 验收 - {@link RsiConfiguration} 装配离线单测（直接调用 Bean 工厂方法 + 注解断言）。
  * <p>验收点：默认关闭（{@code @ConditionalOnProperty} 无 matchIfMissing，enabled=false 时整个配置类 back-off
- * 不产 Bean，P10/P11 RSI 暂停态）；开启后装配 R0 回放底座（{@link ReplayEngine} + 缺省内存 {@link TrajectoryRepository}）
- * 与 R2 蒸馏（{@link MemoryDistiller}，缺省模板抽取器 + 缺省分开关 false）。</p>
+ * 不产 Bean，P10/P11 RSI 暂停态）；开启后装配 R0 回放底座、R2 蒸馏、R3 技能自合成（均另行分开关）。</p>
  */
 class RsiConfigurationTest {
 
@@ -35,6 +37,7 @@ class RsiConfigurationTest {
         assertFalse(new RsiProperties().isEnabled(), "属性默认值同为 false");
         assertFalse(new RsiProperties().getReflection().isEnabled(), "R1 反思默认关闭");
         assertFalse(new RsiProperties().getDistillation().isEnabled(), "R2 蒸馏默认关闭");
+        assertFalse(new RsiProperties().getSynthesis().isEnabled(), "R3 合成默认关闭");
     }
 
     @Test
@@ -76,5 +79,18 @@ class RsiConfigurationTest {
         assertEquals(0.95, d.getDedupThreshold(), 1e-9);
         assertEquals("rsi-distilled", d.getNamespace());
         assertFalse(d.isLlmEnabled());
+    }
+
+    @Test
+    void shouldAssembleR3SynthesisBeans() {
+        assertInstanceOf(SkillSynthesizer.class, configuration.skillSynthesizer());
+        assertInstanceOf(SkillSynthesisValidator.class, configuration.skillSynthesisValidator());
+        assertInstanceOf(SynthesizedSkillRegistrar.class, configuration.synthesizedSkillRegistrar());
+    }
+
+    @Test
+    void shouldDefaultSynthesisAllowlistToEmpty() {
+        assertFalse(new RsiProperties().getSynthesis().isEnabled());
+        assertNotNull(new RsiProperties().getSynthesis().getAllowedToolIds());
     }
 }

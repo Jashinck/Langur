@@ -26,6 +26,9 @@ public class RsiProperties {
     /** R2 记忆自蒸馏配置（{@code langur.rsi.distillation.*}，RsiProperties/RsiConfiguration 共用）。 */
     private Distillation distillation = new Distillation();
 
+    /** R3 技能自合成配置（{@code langur.rsi.synthesis.*}，RsiProperties/RsiConfiguration 共用）。 */
+    private Synthesis synthesis = new Synthesis();
+
     /**
      * R1 反思自检（RSI L1，{@code langur.rsi.reflection.*}）。
      * <p>{@code enabled} 默认 {@code false}；需与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
@@ -69,5 +72,22 @@ public class RsiProperties {
 
         /** 是否用 M5/M6 大模型归纳（缺省 false=确定性模板，离线零网络）。 */
         private boolean llmEnabled = false;
+    }
+
+    /**
+     * R3 技能自合成配置（RSI L3，{@code langur.rsi.synthesis.*}）。
+     * <p>{@code enabled} 默认 {@code false}；与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
+     * {@code SkillSynthesizer}/{@code SkillSynthesisValidator}/{@code SynthesizedSkillRegistrar}。
+     * {@code allowedToolIds} 为越权审查白名单——合成技能引用的 TOOL_CALL 工具必须全部在此（P11 红线，
+     * 缺省空 = 不放行任何外部工具引用）。</p>
+     */
+    @Data
+    public static class Synthesis {
+
+        /** 合成装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
+        private boolean enabled = false;
+
+        /** 越权审查白名单：合成技能可引用的工具 ID 集（缺省空）。 */
+        private java.util.List<String> allowedToolIds = new java.util.ArrayList<>();
     }
 }

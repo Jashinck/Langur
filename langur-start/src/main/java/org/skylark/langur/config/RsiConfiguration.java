@@ -8,6 +8,9 @@ import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryTrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.LlmDistillationExtractor;
 import org.skylark.langur.infrastructure.harness.rsi.RsiProperties;
+import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesisValidator;
+import org.skylark.langur.infrastructure.harness.rsi.SkillSynthesizer;
+import org.skylark.langur.infrastructure.harness.rsi.SynthesizedSkillRegistrar;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,12 +21,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * RSI 装配（R0/R2，start）。<b>默认关闭</b>（P10/P11）：{@code langur.rsi.enabled=false}（或缺省）时整个
+ * RSI 装配（R0/R2/R3，start）。<b>默认关闭</b>（P10/P11）：{@code langur.rsi.enabled=false}（或缺省）时整个
  * {@code @Configuration} 因 {@link ConditionalOnProperty} back-off，不产出任何 Bean，系统行为与既有版本完全一致。
- * <p>开启后装配 R0 <b>离线回放验证底座</b>（{@link ReplayEngine} + {@link TrajectoryRepository}）与 R2
- * <b>记忆自蒸馏</b>（{@link MemoryDistiller}，经 {@code langur.rsi.distillation.enabled} 另行开启）。
- * 二者都是 RSI 一切自改进的安全前提——候选策略须先经回放验证（劣化即拒绝），产物是候选提案，
- * 生效须经 R-G 灰度 + 高危人审（P11 红线：回放通过≠生效）。</p>
+ * <p>开启后装配 R0 <b>离线回放验证底座</b>（{@link ReplayEngine} + {@link TrajectoryRepository}）、R2
+ * <b>记忆自蒸馏</b>（{@link MemoryDistiller}，经 {@code langur.rsi.distillation.enabled} 另行开启）与 R3
+ * <b>技能自合成</b>（{@link SkillSynthesizer} + {@link SkillSynthesisValidator} + {@link SynthesizedSkillRegistrar}，
+ * 经 {@code langur.rsi.synthesis.enabled} 另行开启）。产物都是 RSI 候选提案，须经 R0 回放 + R-G 灰度 + 高危人审
+ * 方可生效（P11 红线：回放通过≠生效）。</p>
  */
 @Configuration
 @ConditionalOnProperty(name = "langur.rsi.enabled", havingValue = "true")
@@ -73,5 +77,29 @@ public class RsiConfiguration {
                 properties.getDistillation().getMinConfidence(),
                 properties.getDistillation().getDedupThreshold(),
                 properties.getDistillation().getNamespace());
+    }
+
+    /** 技能自合成器（R3）：确定性模板归纳（M5 归纳为后续增强）。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.synthesis.enabled", havingValue = "true")
+    public SkillSynthesizer skillSynthesizer() {
+        log.info("[RSI] assembling R3 skill synthesizer (deterministic template induction, candidate-only)");
+        return new SkillSynthesizer();
+    }
+
+    /** 技能合成校验器（R3）：越权审查 + 只降本红线（离线确定性）。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.synthesis.enabled", havingValue = "true")
+    public SkillSynthesisValidator skillSynthesisValidator() {
+        log.info("[RSI] assembling R3 skill synthesis validator (allowlist + cost guard, P11)");
+        return new SkillSynthesisValidator();
+    }
+
+    /** 合成技能注册器（R3）：版本化 + 一键回滚。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.synthesis.enabled", havingValue = "true")
+    public SynthesizedSkillRegistrar synthesizedSkillRegistrar() {
+        log.info("[RSI] assembling R3 synthesized skill registrar (versioned + rollback)");
+        return new SynthesizedSkillRegistrar();
     }
 }
