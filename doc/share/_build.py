@@ -21,6 +21,7 @@ def inline_img(match):
 
 
 def inline(seg):
+    seg = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2" style="color:#2563eb;">\1</a>', seg)
     seg = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", seg)
     seg = re.sub(r"`([^`]+)`", r"<code>\1</code>", seg)
     return seg
