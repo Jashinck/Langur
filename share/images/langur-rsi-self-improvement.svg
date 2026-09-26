@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="960" height="620">
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+  </style>
+  <defs>
+    <marker id="m-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="m-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/></marker>
+    <marker id="m-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#059669"/></marker>
+    <marker id="m-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker>
+    <marker id="m-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker>
+    <marker id="m-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0d9488"/></marker>
+  </defs>
+  <rect width="960" height="620" fill="#ffffff"/>
+  <text x="480" y="30" text-anchor="middle" fill="#111827" font-size="18" font-weight="700">RSI 递归自我改进（安全平面统辖）</text>
+  <rect x="40" y="52" width="880" height="80" rx="10" ry="10" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="52" y="44" fill="#6b7280" font-size="12" font-weight="600">R-G 安全平面（P0，统辖一切自改进）</text>
+  <rect x="60" y="72" width="260" height="44" rx="8" ry="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+  <text x="190" y="92" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">提案-验证-应用三段式</text>
+  <text x="190" y="109" text-anchor="middle" fill="#6b7280" font-size="11">默认候选 · 不直接生效</text>
+  <rect x="340" y="72" width="260" height="44" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+  <text x="470" y="92" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">高危强制人审 + 一键回滚</text>
+  <text x="470" y="109" text-anchor="middle" fill="#6b7280" font-size="11">权限隔离红线 · 只收紧</text>
+  <rect x="620" y="72" width="280" height="44" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+  <text x="760" y="92" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">深度/频率限流 + 灰度</text>
+  <text x="760" y="109" text-anchor="middle" fill="#6b7280" font-size="11">checksum 审计链</text>
+  <rect x="40" y="168" width="880" height="170" rx="10" ry="10" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="52" y="160" fill="#6b7280" font-size="12" font-weight="600">自改进流水线（R0 为安全前提）</text>
+  <rect x="56" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="124" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R0 回放验证</text>
+  <text x="124" y="251" text-anchor="middle" fill="#6b7280" font-size="11">反事实重放 · 劣化即拒绝</text>
+  <rect x="204" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="272" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R1 反思自检</text>
+  <text x="272" y="251" text-anchor="middle" fill="#6b7280" font-size="11">Jev 初筛 · 低质升级 M5</text>
+  <rect x="352" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="420" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R2 记忆自蒸馏</text>
+  <text x="420" y="251" text-anchor="middle" fill="#6b7280" font-size="11">轨迹→L4 · 置信门+去重</text>
+  <rect x="500" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="568" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R3 技能自合成</text>
+  <text x="568" y="251" text-anchor="middle" fill="#6b7280" font-size="11">轨迹→Skill · 回放+越权审查</text>
+  <rect x="648" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="716" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R4 策略自优化</text>
+  <text x="716" y="251" text-anchor="middle" fill="#6b7280" font-size="11">bandit 择优 · 阈值+回滚</text>
+  <rect x="796" y="196" width="136" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#a7f3d0" stroke-width="1.5"/>
+  <text x="864" y="234" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R5 工具自扩展</text>
+  <text x="864" y="251" text-anchor="middle" fill="#6b7280" font-size="11">缺口检测 · SSRF+人审</text>
+  <line x1="192" y1="236" x2="204" y2="236" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)"/>
+  <line x1="340" y1="236" x2="352" y2="236" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)"/>
+  <line x1="488" y1="236" x2="500" y2="236" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)"/>
+  <line x1="636" y1="236" x2="648" y2="236" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)"/>
+  <line x1="784" y1="236" x2="796" y2="236" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)"/>
+  <rect x="40" y="372" width="880" height="100" rx="10" ry="10" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="52" y="364" fill="#6b7280" font-size="12" font-weight="600">生效路径（回放通过 ≠ 生效，P11）</text>
+  <rect x="60" y="396" width="260" height="56" rx="8" ry="8" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.5"/>
+  <text x="190" y="422" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">候选提案</text>
+  <text x="190" y="439" text-anchor="middle" fill="#6b7280" font-size="11">R* 产物默认候选</text>
+  <rect x="340" y="396" width="260" height="56" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="470" y="422" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R0 回放验证</text>
+  <text x="470" y="439" text-anchor="middle" fill="#6b7280" font-size="11">不劣于基线才放行</text>
+  <rect x="620" y="396" width="280" height="56" rx="8" ry="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+  <text x="760" y="422" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">R-G 灰度 + 高危人审</text>
+  <text x="760" y="439" text-anchor="middle" fill="#6b7280" font-size="11">才可生效 · 劣化自动回滚</text>
+  <line x1="320" y1="424" x2="336" y2="424" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#m-purple)"/>
+  <line x1="600" y1="424" x2="616" y2="424" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#m-blue)"/>
+  <line x1="480" y1="132" x2="480" y2="166" stroke="#dc2626" stroke-width="1.5" fill="none" marker-end="url(#m-red)" stroke-dasharray="5,4"/>
+  <text x="520" y="144" text-anchor="middle" fill="#6b7280" font-size="11">统辖</text>
+  <line x1="480" y1="338" x2="480" y2="370" stroke="#059669" stroke-width="1.5" fill="none" marker-end="url(#m-green)" stroke-dasharray="5,4"/>
+  <text x="520" y="349" text-anchor="middle" fill="#6b7280" font-size="11">候选提交</text>
+  <text x="480" y="500" text-anchor="middle" fill="#6b7280" font-size="11">所有自改进产物默认是候选提案 · 须经回放 + 灰度 + 人审方可生效（P11/P12）</text>
+</svg>

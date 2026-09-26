@@ -1,116 +1,107 @@
-# 🐒 Langur — 叶猴 Agent 框架
+# Langur Agent-Harness — 叶猴 Agent 能力框架
 
-> **Langur** 是 [Skylark](https://github.com/Jashinck/Skylark) 生态中的通用 Agent 能力框架，以叶猴（Langur）命名，轻盈而敏捷。  
-> 基于 DDD 六边形架构，支持 ReAct 循环、工具调用、多步规划与多 Agent 协作。
+> **Langur** 是 [Skylark](https://github.com/Jashinck/Skylark) 生态中的通用 Agent-Harness 框架，以叶猴（Langur）命名，轻盈而敏捷。
+> 基于 DDD 六边形架构，六组件正交设计，支持 ReAct / PlanAndExecute / Workflow / Hybrid 多范式执行、工具调用、Jev 决策平面与递归自我改进（RSI）。
 
 ---
 
-## ✨ 特性
+## 能力全景
 
-| 能力 | 说明 |
+| 领域 | 能力 |
 |------|------|
-| 🔄 ReAct 循环 | Reasoning + Acting，最大迭代次数可配置 |
-| 🛠️ 工具调用 | 内置 HTTP 工具，支持自定义工具注册 |
-| 📋 多步规划 | PlanningDomainService 拆解复杂任务为步骤 |
-| 🧾 Plan 持久化 | 内置 PlanRepository，可查询最近一次执行计划 |
-| ⚙️ 异步执行任务 | 支持异步运行、任务状态查询与按 Agent 任务列表 |
-| 🤝 多 Agent 协作 | AgentId 隔离，支持跨 Agent 任务分发 |
-| 📡 REST API | 标准 HTTP 接口，便于集成任意前端或系统 |
-| 🧩 结构化消息输入 | 支持 `messageParts`（text/image/audio/video/file/structured-data） |
-| 🔀 多 LLM 支持 | 内置 OpenAI、Claude、Gemini、DeepSeek、Qwen 等多种 LLM 适配器 |
-| 📚 工程审计 | 设计文档与代码变更同步提交，便于决策追溯与复盘 |
+| **执行范式** | ReAct 循环、PlanAndExecute、Workflow 编排、Hybrid 分层调度（层路由 → Workflow → PlanAndExecute → ReAct） |
+| **工具体系** | 统一工具链（内置 HTTP / 代码访问 / 知识库 / Skill / MCP / REST OpenAPI），四层校验链（权限 → 风险 → 白名单 → 限流） |
+| **上下文** | 四级分层记忆（L1 瞬时 / L2 会话 / L3 任务 / L4 向量知识）+ 语义召回 + Token 预算治理 |
+| **状态** | 快照断点续跑、分布式锁防重入、幂等键、Redis 热层 |
+| **生命周期** | 钩子引擎（HookPoint 拦截 + ABORT/SKIP/MODIFY），安全注入/输出审核/高危人审挂点 |
+| **可观测** | 四维指标（SCHEDULING/TOOL/MODEL/SECURITY/DECISION）→ Prometheus + MQ 审计 + 分级告警 |
+| **模型网关** | 统一 `LlmGateway`（角色→模型 + 主备降级 + Provider 熔断），配置化接入 OpenAI/Claude/Gemini/DeepSeek/Qwen/GLM |
+| **向量库** | 可插拔 `VectorStore`（memory/pgvector/Elasticsearch/Milvus），原生混合检索（RRF/加权）+ 应用侧兜底 |
+| **决策平面** | `DecisionPort`（Jev 判定模型：choice/probability/score + 置信度），装饰链（录制 ⊃ 缓存 ⊃ 阈值 ⊃ 后端 ⊃ 兜底），10 个执行插入点 |
+| **RSI 自改进** | 回放验证引擎（R0）→ 反思自检（R1）→ 记忆自蒸馏（R2）→ 技能自合成（R3）→ 安全平面（R-G）→ 策略自优化（R4）→ 工具自扩展（R5） |
+| **多 Agent** | AgentId 隔离消息总线 + 跨 Agent 委派 + SUB_AGENT 步骤执行接缝 |
+| **工程治理** | ArchUnit 架构守卫（domain 纯度 / 分层无环）、P1–P12 设计原则、设计文档与代码同步提交 |
 
 ---
 
-## 🏗️ 架构
+## 架构
 
-### 项目结构
+### 六组件正交 + 决策平面横切
+
+```
+                ┌─────────────────────────────────────────────┐
+                │  决策平面（DecisionPort，System-1 判定层）      │
+                │  Jev 后端 + 录制/缓存/阈值/数据驻留装饰链        │
+                └─────────────────────────────────────────────┘
+                                   ▲ ObjectProvider 横切注入（非第七组件）
+┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐
+│  E   │ → │  T   │ → │  C   │ → │  S   │ → │  L   │ → │  V   │
+│执行  │   │工具  │   │上下文│   │状态  │   │生命周期│  │可观测│
+└──────┘   └──────┘   └──────┘   └──────┘   └──────┘   └──────┘
+```
+
+- **E（Execution）**：ReAct / PlanAndExecute / Workflow / Hybrid 四范式，终止闸门 + 循环检测
+- **T（Tool）**：统一工具注册中心 + 四层校验链（权限/风险/白名单/限流）
+- **C（Context）**：双画像 + 四级记忆 + 脱敏过滤 + Token 预算
+- **S（State）**：任务状态快照、断点续跑、分布式锁、幂等
+- **L（Lifecycle）**：钩子引擎，BEFORE/AFTER 各拦截点
+- **V（Evaluation）**：四维指标上报 + 审计留痕
+- **决策平面**：J1–J10 落地，对安全/审批闸门恒 advisory、只收紧不放松（P12）
+
+### DDD 六边形分层（6 Maven 模块）
 
 ```
 langur/
-├── langur-common/               # 公共基础层
-│   ├── exception/               # 异常体系
-│   └── model/                   # 公共类型
-├── langur-domain/               # 核心领域层
-│   ├── model/
-│   │   ├── agent/               # Agent 聚合根（Agent, AgentId, AgentConfig, AgentStatus）
-│   │   ├── execution/           # 执行任务模型（AgentRunTask, RunTaskStatus）
-│   │   ├── message/             # 消息类型模型（MessagePartType）
-│   │   ├── plan/                # 规划模型（Plan, PlanStep, StepStatus）
-│   │   └── tool/                # 工具定义（Tool, ToolDefinition, ToolResult）
-│   ├── service/                 # 领域服务（AgentDomainService, PlanningDomainService）
-│   ├── repository/              # 仓储接口（AgentRepository, PlanRepository, AgentRunTaskRepository）
-│   ├── port/                    # 端口定义（LLMPort, ToolProvider）
-│   └── event/                   # 领域事件（AgentCreatedEvent, AgentExecutedEvent）
-├── langur-application/          # 应用编排层
-│   ├── service/                 # 用例（AgentApplicationService, AgentRunTaskApplicationService, ToolRegistryService）
-│   ├── command/                 # 命令对象（CreateAgentCommand, RunAgentCommand, MessagePartInput）
-│   └── assembler/               # DTO 转换
-├── langur-infrastructure/       # 基础设施层
-│   ├── llm/                     # LLM 适配器（OpenAI, Claude, Gemini, DeepSeek, Qwen）
-│   ├── tool/                    # 内置工具（BuiltinToolRegistry, HttpCallTool）
-│   └── persistence/             # 内存持久化（InMemoryAgentRepository, InMemoryPlanRepository, InMemoryAgentRunTaskRepository）
-├── langur-api/                  # 接口暴露层
-│   ├── rest/                    # REST 控制器（AgentController）
-│   └── dto/                     # 请求/响应 DTO
-└── langur-start/                # 启动装配层
-    ├── config/                  # Spring 配置
-    └── resources/               # 配置文件
+├── langur-common/           # 公共基础：SPI 契约（SecurityPolicySPI/DecisionEngineSPI 等）
+├── langur-domain/           # 领域层：六组件 + 决策平面值对象 + RSI 引擎（零外部依赖，P1）
+├── langur-application/      # 应用编排层：用例编排（AgentApplicationService 等）
+├── langur-api/              # 接口层：REST 控制器（/api/agents、/api/v1/agent、流式）
+├── langur-infrastructure/   # 基础设施层：LLM 网关、向量库、MCP/REST 工具、持久化、RSI 装配件
+└── langur-start/            # 启动装配层：Spring 配置、application.yml
 ```
 
-### 文档组织
-
-```
-doc/                  # 技术分享与总结类文档（长期知识积累）
-├── 01-ddd-hexagonal-multi-module-refactoring.md
-└── 02-langur-framework-overview.md
-
-design/               # PR 对应的技术设计文档（决策与实现审计）
-└── technical-design-pr-process.md
-```
+依赖方向（P2 单向无环）：`start → api → application → domain ← infrastructure`；`domain` 不 import Spring/infrastructure（ArchUnit 守护）。
 
 ---
 
-## 🚀 快速开始
+## RoadMap 里程碑
+
+| 版本 | 里程碑 | 内容 | 状态 |
+|------|--------|------|------|
+| **2.0** | H1–H10 | 六组件补全：Token 计量 / 语义 Embedding / PlanAndExecute / Redis 热层 / 可观测 / MCP / REST 工具 / Skill 编排 / Workflow+Hybrid / 安全补强 | ✅ 已完成 |
+| **2.1** | H13 / H14（G1→G3） | 统一模型网关（配置工厂 + GLM + 降级修复 + SecretResolver + Provider 熔断）、可插拔向量库（端口扩展 + ES/Milvus/pgvector + 原生混合检索） | ✅ 已完成 |
+| **3.0** | J1–J10 / R0–R5 / H11 / H12（D1→D3） | 决策平面（Jev 判定层 + 10 插入点）、RSI 递归自我改进（回放/反思/蒸馏/技能合成/安全平面/策略调优/工具自扩展）、依赖治理、多 Agent | ✅ 已完成 |
+
+设计文档见 `design/`（RoadMap 2.0/2.1/3.0 + 对应架构设计）。
+
+---
+
+## 快速开始
 
 ### 环境要求
 
-- Java 17+
+- **Java 17**（Lombok 在 JDK 22+ 会失效，须固定 JDK 17；`maven-compiler-plugin` 已加 `<release>17</release>` 守卫）
 - Maven 3.8+
 
 ### 构建 & 运行
 
-#### 完整项目构建与运行
-
 ```bash
-# 构建完整项目（包含所有 6 个模块）
+# 完整构建（6 模块）
 mvn clean package -DskipTests
 
-# 启动服务
+# 运行完整测试套件（JDK 17）
+export JAVA_HOME=/path/to/jdk-17
+mvn clean test
+
+# 启动服务（默认 8081）
 java -jar langur-start/target/langur.jar
 ```
 
-#### 分模块开发
-
-```bash
-# 运行完整测试套件
-mvn clean test
-
-# 构建指定模块
-mvn clean package -pl langur-domain -DskipTests
-
-# 跳过测试快速打包
-mvn clean package -DskipTests
-
-# 只构建 langur-start 启动包
-mvn clean package -pl langur-start -DskipTests
-```
-
-服务默认启动在 `http://localhost:8080`。
+服务默认启动在 `http://localhost:8081`，健康检查 `/actuator/health`，指标 `/actuator/prometheus`。
 
 ---
 
-## 📡 API 接口
+## API 接口
 
 ### 创建 Agent
 
@@ -129,24 +120,20 @@ Content-Type: application/json
 }
 ```
 
-### 执行 Agent
+### 执行 Agent（同步 / 异步 / 结构化消息）
 
 ```http
 POST /api/agents/{agentId}/run
-Content-Type: application/json
-
-{
-  "userMessage": "帮我查询明天北京的天气"
-}
+POST /api/agents/{agentId}/run/async
+POST /api/v1/agent
+POST /api/v1/agent/stream        # SSE 流式
 ```
 
-也支持结构化消息输入（用于多模态演进的兼容入口）：
+结构化消息（多模态兼容入口）：
 
 ```json
 {
-  "userId": "u-001",
-  "tenantId": "t-001",
-  "sessionId": "s-001",
+  "userId": "u-001", "tenantId": "t-001", "sessionId": "s-001",
   "messageParts": [
     {"type": "text", "content": "请分析这张图"},
     {"type": "image", "mediaUrl": "https://example.com/demo.png"}
@@ -154,138 +141,77 @@ Content-Type: application/json
 }
 ```
 
-### 异步执行 Agent
-
-```http
-POST /api/agents/{agentId}/run/async
-Content-Type: application/json
-
-{
-  "userMessage": "帮我总结今天的工作项",
-  "userId": "u-001",
-  "tenantId": "t-001",
-  "sessionId": "s-001"
-}
-```
-
-### 其他接口
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/agents` | 列出所有 Agent |
-| `GET` | `/api/agents/{id}` | 获取 Agent 详情 |
-| `GET` | `/api/agents/{id}/plan` | 获取最近一次执行计划 |
-| `GET` | `/api/agents/{id}/runs` | 获取该 Agent 的异步任务列表 |
-| `GET` | `/api/agents/runs/{taskId}` | 获取异步任务状态 |
-| `DELETE` | `/api/agents/{id}` | 删除 Agent |
+其他接口：`GET /api/agents`、`GET /api/agents/{id}`、`GET /api/agents/{id}/plan`、`GET /api/agents/{id}/runs`、`GET /api/agents/runs/{taskId}`、`DELETE /api/agents/{id}`。
 
 ---
 
-## 🔌 扩展与集成
+## 扩展与集成
 
-### 支持多种 LLM 后端
+### 模型网关（H13）
 
-Langur 内置支持多种 LLM 提供商，通过实现 `LLMPort` 接口可扩展任意 LLM：
-
-#### 内置 LLM 适配器
-
-| 提供商 | 适配器类 | 特点 |
-|------|---------|------|
-| **OpenAI** | `OpenAILLMAdapter` | 支持 GPT-4o、GPT-4、GPT-3.5 等 |
-| **Claude** | `ClaudeLLMAdapter` | 支持 Claude 3 系列，强大的推理能力 |
-| **Gemini** | `GeminiLLMAdapter` | Google Gemini API，支持多模态 |
-| **DeepSeek** | `DeepSeekLLMAdapter` | 兼容 OpenAI 协议 |
-| **Qwen** | `QwenLLMAdapter` | 阿里云通义千问模型 |
-
-#### 配置示例
+配置化接入，新增 OpenAI 兼容厂商零 Java 代码：
 
 ```yaml
-# application.yml
 langur:
   llm:
-    default: openai
+    default-provider: openai
     providers:
-      openai:
-        enabled: true
-        api-key: ${OPENAI_API_KEY}
-        model: gpt-4o
-      claude:
-        enabled: true
-        api-key: ${CLAUDE_API_KEY}
-        model: claude-3-opus-20240229
-      gemini:
-        enabled: true
-        api-key: ${GEMINI_API_KEY}
-        model: gemini-pro
+      openai: { type: openai-compatible, base-url: https://api.openai.com/v1,
+                api-key-ref: env:OPENAI_API_KEY, model: gpt-4o, model-prefixes: [gpt-, o1-, o3-] }
+      glm:    { type: openai-compatible, base-url: https://open.bigmodel.cn/api/paas/v4,
+                api-key-ref: env:GLM_API_KEY, model: glm-4-plus, model-prefixes: [glm-, chatglm-] }
+    role-models: { REASONING: gpt-4o }
+    fallback-chains: { gpt-4o: [deepseek-chat, qwen-max] }
+    circuit-breaker: { enabled: true, threshold: 3, cooldown-seconds: 30 }
 ```
 
-#### 自定义 LLM 适配器
+### 向量库（H14）
 
-实现 `LLMPort` 接口即可接入任意 LLM：
-
-```java
-public interface LLMPort {
-    /**
-     * 调用 LLM 模型进行对话
-     * @param messages 对话历史（role: user/assistant/system, content: 消息内容）
-     * @param tools 可用工具定义列表
-     * @return LLM 的响应内容（JSON 格式的决策结果）
-     */
-    String chat(List<Map<String, String>> messages, List<ToolDefinition> tools);
-}
+```yaml
+langur:
+  vector:
+    store: memory            # memory | pgvector | elasticsearch | milvus
+    hybrid: { enabled: false, mode: native, fusion: RRF }
 ```
 
-### 扩展自定义工具
+### 决策平面 + RSI（v3.0，默认关，P11 暂停态）
 
-所有工具必须继承 `Tool` 抽象类并在 `ToolRegistry` 中注册：
+```yaml
+langur:
+  decision: { enabled: true, backend: typesafe, record: true }
+  rsi:
+    enabled: false            # RSI 总开关（默认关）
+    reflection:    { enabled: false }
+    distillation:  { enabled: false }
+    synthesis:     { enabled: false }
+    governance:    { enabled: false }
+    optimization:  { enabled: false }
+    extension:     { enabled: false }
+```
 
-```java
-// 1. 定义自定义工具
-public class WeatherTool extends Tool {
-    public WeatherTool() {
-        super(new ToolDefinition(
-            "get_weather",
-            "查询指定城市的天气信息",
-            Map.of(
-                "city", Map.of("type", "string", "description", "城市名称"),
-                "days", Map.of("type", "integer", "description", "预报天数")
-            )
-        ));
-    }
+### 自定义工具
 
-    @Override
-    public ToolResult execute(Map<String, Object> parameters) {
-        String city = (String) parameters.get("city");
-        // 实现查询逻辑
-        return ToolResult.success("北京明天晴天，气温 25°C");
-    }
-}
+继承 `Tool` 并注册进 `ToolRegistry`，或经 `@SkillDef` 声明编排技能、经 MCP/REST OpenAPI 自动发现接入。
 
-// 2. 在 ToolRegistry 中注册
-@Component
-public class CustomToolRegistry implements ToolProvider {
-    @Override
-    public void registerTools(ToolRegistry registry) {
-        registry.register(new WeatherTool());
-    }
-}
+---
 
-// 3. 创建 Agent 时引用
-{
-  "name": "weather-agent",
-  "toolNames": ["http_call", "get_weather"]
-}
+## 文档
+
+```
+design/    # 设计文档（RoadMap + 架构设计 + 决策/实现审计）
+doc/       # 技术分享与总结
+share/     # 公众号分享博文
 ```
 
 ---
 
-## 🔗 相关项目
+## 相关项目
 
 - [Skylark](https://github.com/Jashinck/Skylark) — 实时 AI 语音对话系统
 - [BlueWhale](https://github.com/Jashinck/BlueWhale) — 蓝鲸记忆框架（与 Langur 配套）
 
 ---
 
-## 📄 许可证
+## 许可证
 
 Apache License 2.0
