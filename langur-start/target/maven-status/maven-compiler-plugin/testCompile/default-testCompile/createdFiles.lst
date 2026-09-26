@@ -1,3 +1,13 @@
-org/skylark/langur/api/governance/GovernanceFilterTest.class
+org/skylark/langur/api/governance/CacheIdempotencyStoreTest.class
+org/skylark/langur/config/PgVectorDataSourceConfigurationTest$1.class
 org/skylark/langur/application/AgentApplicationServiceTest.class
+org/skylark/langur/config/RsiConfigurationTest.class
+org/skylark/langur/api/governance/GovernanceFilterTest.class
 org/skylark/langur/application/AgentApplicationServiceTest$1.class
+org/skylark/langur/config/DecisionConfigurationTest$1.class
+org/skylark/langur/config/ArchitectureGuardTest.class
+org/skylark/langur/config/PgVectorDataSourceConfigurationTest.class
+org/skylark/langur/config/DecisionConfigurationTest.class
+org/skylark/langur/api/governance/CacheRateLimiterTest.class
+org/skylark/langur/config/VectorDimensionGuardTest.class
+org/skylark/langur/config/VectorDimensionGuardTest$FixedEmbedding.class

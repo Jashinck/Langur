@@ -1,5 +1,10 @@
 org/skylark/langur/config/HarnessConfiguration.class
+org/skylark/langur/config/RsiConfiguration.class
+org/skylark/langur/config/ModelProviderConfiguration.class
+org/skylark/langur/config/VectorDimensionGuard.class
+org/skylark/langur/config/DecisionConfiguration.class
 org/skylark/langur/config/DomainServiceConfiguration.class
 org/skylark/langur/config/ObservabilityConfiguration.class
+org/skylark/langur/config/PgVectorDataSourceConfiguration.class
 org/skylark/langur/config/LoggingSpanExporter.class
 org/skylark/langur/LangurApplication.class

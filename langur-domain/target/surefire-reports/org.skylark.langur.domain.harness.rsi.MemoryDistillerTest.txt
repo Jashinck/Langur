@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.skylark.langur.domain.harness.rsi.MemoryDistillerTest
+-------------------------------------------------------------------------------
+Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.012 s -- in org.skylark.langur.domain.harness.rsi.MemoryDistillerTest

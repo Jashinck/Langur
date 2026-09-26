@@ -1,6 +1,7 @@
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/dto/PlanResult.java
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/dto/AgentResult.java
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/stream/AgentStreamApplicationService.java
+/Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/dto/ArtifactResult.java
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/service/AgentApplicationService.java
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/dto/PlanStepResult.java
 /Users/cn-artisanzhou/Library/Mobile Documents/com~apple~CloudDocs/Documents/VoiceAgent/Framework/Langur/langur-application/src/main/java/org/skylark/langur/application/service/ToolRegistryService.java
