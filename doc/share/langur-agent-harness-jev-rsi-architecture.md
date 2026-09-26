@@ -156,6 +156,6 @@ Langur 的这套设计已经全部落地，累计 600+ 项离线测试全绿。�
 - **基础设施**：补齐更多模型厂商、更多向量库，让"换模型、换存储"始终停留在改配置这一步；
 - **工程治理**：把上面那五条方法论，推广到更多项目里。
 
-代码在 [github.com/Jashinck/Skylark](https://github.com/Jashinck/Skylark)（Langur 为其 Agent 框架子项目），设计文档随仓库开源，每一笔能力落地都有记录可追溯。
+代码在 [github.com/Jashinck/Langur](https://github.com/Jashinck/Langur)——一个独立的企业级 Agent-Harness 框架，设计文档随仓库开源，每一笔能力落地都有记录可追溯。
 
 **如果你也在做 Agent，或者对"正交 + 判定分层 + 自改进护栏"这套范式有想法，欢迎提 issue、提 PR、一起讨论。** 让这只叶猴，再轻盈一点，也再聪明一点。
