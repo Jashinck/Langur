@@ -1,40 +1,91 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700">
   <style>
     text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
   </style>
   <defs>
     <marker id="m-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
     <marker id="m-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/></marker>
-    <marker id="m-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#059669"/></marker>
-    <marker id="m-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/></marker>
-    <marker id="m-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/></marker>
     <marker id="m-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#0d9488"/></marker>
   </defs>
-  <rect width="960" height="560" fill="#ffffff"/>
-  <text x="480" y="30" text-anchor="middle" fill="#111827" font-size="18" font-weight="700">DDD 六边形分层（6 Maven 模块）</text>
-  <rect x="130" y="60" width="200" height="80" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
-  <text x="230" y="97" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">start</text>
-  <text x="230" y="114" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">启动装配层</text>
-  <rect x="130" y="180" width="200" height="80" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
-  <text x="230" y="217" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">api</text>
-  <text x="230" y="234" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">接口层（REST/SSE）</text>
-  <rect x="130" y="300" width="200" height="80" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
-  <text x="230" y="337" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">application</text>
-  <text x="230" y="354" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">应用编排层</text>
-  <rect x="390" y="240" width="220" height="100" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
-  <text x="500" y="287" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">domain</text>
-  <text x="500" y="304" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">领域层 · 零外部依赖（P1）</text>
-  <rect x="660" y="180" width="200" height="80" rx="8" ry="8" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.5"/>
-  <text x="760" y="217" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">infrastructure</text>
-  <text x="760" y="234" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">基础设施层</text>
-  <rect x="390" y="440" width="220" height="80" rx="8" ry="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
-  <text x="500" y="477" text-anchor="middle" fill="#111827" font-size="14" font-weight="600">common</text>
-  <text x="500" y="494" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">公共基础（SPI 契约）</text>
-  <line x1="230" y1="140" x2="230" y2="178" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#m-blue)"/>
-  <line x1="230" y1="260" x2="230" y2="298" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#m-blue)"/>
-  <line x1="330" y1="320" x2="388" y2="320" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#m-blue)"/>
-  <line x1="660" y1="220" x2="612" y2="268" stroke="#7c3aed" stroke-width="1.5" fill="none" marker-end="url(#m-purple)"/>
-  <line x1="500" y1="438" x2="500" y2="342" stroke="#0d9488" stroke-width="1.5" fill="none" marker-end="url(#m-teal)"/>
-  <text x="230" y="46" text-anchor="middle" fill="#6b7280" font-size="11" font-weight="400">依赖方向（P2 单向无环）</text>
-  <text x="480" y="537" text-anchor="middle" fill="#6b7280" font-size="12" font-weight="400">start → api → application → domain ← infrastructure</text>
+  <rect width="1000" height="700" fill="#ffffff"/>
+  <text x="500" y="32" text-anchor="middle" fill="#111827" font-size="19" font-weight="700">DDD 六边形分层 · 6 Maven 模块 · 单向依赖（P2 无环）</text>
+
+  <!-- ===== 依赖箭头（先行，置于盒体之下） ===== -->
+  <line x1="180" y1="170" x2="180" y2="202" stroke="#2563eb" stroke-width="1.6" fill="none" marker-end="url(#m-blue)"/>
+  <line x1="180" y1="314" x2="180" y2="346" stroke="#2563eb" stroke-width="1.6" fill="none" marker-end="url(#m-blue)"/>
+  <line x1="300" y1="403" x2="378" y2="403" stroke="#2563eb" stroke-width="1.6" fill="none" marker-end="url(#m-blue)"/>
+  <line x1="740" y1="330" x2="682" y2="330" stroke="#7c3aed" stroke-width="1.6" fill="none" marker-end="url(#m-purple)"/>
+  <line x1="180" y1="458" x2="180" y2="554" stroke="#0d9488" stroke-width="1.4" fill="none" marker-end="url(#m-teal)"/>
+  <line x1="530" y1="430" x2="530" y2="554" stroke="#0d9488" stroke-width="1.4" fill="none" marker-end="url(#m-teal)"/>
+  <line x1="845" y1="430" x2="845" y2="554" stroke="#0d9488" stroke-width="1.4" fill="none" marker-end="url(#m-teal)"/>
+  <text x="711" y="318" text-anchor="middle" fill="#7c3aed" font-size="9">实现端口</text>
+  <text x="544" y="496" fill="#0d9488" font-size="9">契约</text>
+  <text x="322" y="392" text-anchor="middle" fill="#2563eb" font-size="9">依赖</text>
+
+  <!-- ===== start ===== -->
+  <rect x="60" y="60" width="240" height="110" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="180" y="84" text-anchor="middle" fill="#1e3a8a" font-size="14" font-weight="700">start</text>
+  <text x="180" y="101" text-anchor="middle" fill="#6b7280" font-size="9.5">langur-start · 根包 *.langur</text>
+  <text x="180" y="120" text-anchor="middle" fill="#374151" font-size="10">启动装配 · 自动装配 · 配置</text>
+  <text x="180" y="137" text-anchor="middle" fill="#374151" font-size="10">健康检查 · 应用上下文</text>
+  <text x="180" y="158" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：业务逻辑</text>
+
+  <!-- ===== api ===== -->
+  <rect x="60" y="204" width="240" height="110" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="180" y="228" text-anchor="middle" fill="#1e3a8a" font-size="14" font-weight="700">api</text>
+  <text x="180" y="245" text-anchor="middle" fill="#6b7280" font-size="9.5">langur-api · 根包 *.api</text>
+  <text x="180" y="264" text-anchor="middle" fill="#374151" font-size="10">REST / SSE 协议适配</text>
+  <text x="180" y="281" text-anchor="middle" fill="#374151" font-size="10">参数校验 · 限流</text>
+  <text x="180" y="302" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：编排逻辑</text>
+
+  <!-- ===== application ===== -->
+  <rect x="60" y="348" width="240" height="110" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="180" y="372" text-anchor="middle" fill="#1e3a8a" font-size="14" font-weight="700">application</text>
+  <text x="180" y="389" text-anchor="middle" fill="#6b7280" font-size="9.5">langur-application · *.application</text>
+  <text x="180" y="408" text-anchor="middle" fill="#374151" font-size="10">用例编排 · 事务协调</text>
+  <text x="180" y="425" text-anchor="middle" fill="#374151" font-size="10">DTO 转换 · 事件分发</text>
+  <text x="180" y="446" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：领域规则</text>
+
+  <!-- ===== domain（核心） ===== -->
+  <rect x="380" y="230" width="300" height="200" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <rect x="648" y="238" width="40" height="16" rx="3" fill="#f59e0b"/>
+  <text x="668" y="250" text-anchor="middle" fill="#ffffff" font-size="9" font-weight="700">CORE</text>
+  <text x="530" y="258" text-anchor="middle" fill="#92400e" font-size="15" font-weight="700">domain</text>
+  <text x="530" y="276" text-anchor="middle" fill="#6b7280" font-size="9.5">langur-domain · 根包 *.domain</text>
+  <text x="530" y="298" text-anchor="middle" fill="#374151" font-size="10">六组件领域模型 · 端口 · 事件</text>
+  <text x="530" y="316" text-anchor="middle" fill="#374151" font-size="10">决策平面值对象 · RSI 引擎</text>
+  <text x="530" y="340" text-anchor="middle" fill="#92400e" font-size="9.5" font-weight="600">零外部依赖（P1）· ArchUnit 守护</text>
+  <text x="530" y="358" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：import Spring / 中间件</text>
+
+  <!-- ===== infrastructure ===== -->
+  <rect x="740" y="230" width="210" height="200" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="845" y="258" text-anchor="middle" fill="#5b21b6" font-size="14" font-weight="700">infrastructure</text>
+  <text x="845" y="276" text-anchor="middle" fill="#6b7280" font-size="9.5">langur-infrastructure</text>
+  <text x="845" y="293" text-anchor="middle" fill="#6b7280" font-size="9.5">根包 *.infrastructure</text>
+  <text x="845" y="314" text-anchor="middle" fill="#374151" font-size="10">仓储 · LLM 网关 · 向量库</text>
+  <text x="845" y="331" text-anchor="middle" fill="#374151" font-size="10">沙箱 · MCP/REST 工具</text>
+  <text x="845" y="348" text-anchor="middle" fill="#374151" font-size="10">RSI 装配件</text>
+  <text x="845" y="370" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：业务规则</text>
+
+  <!-- ===== common 公共基础带 ===== -->
+  <rect x="60" y="556" width="890" height="96" rx="8" fill="#f0fdfa" stroke="#5eead4" stroke-width="1.5"/>
+  <text x="505" y="582" text-anchor="middle" fill="#115e59" font-size="13" font-weight="700">common · langur-common — 公共基础</text>
+  <text x="505" y="601" text-anchor="middle" fill="#374151" font-size="10">枚举 / 异常 / DTO / SPI 契约 / 共享端口</text>
+  <text x="505" y="619" text-anchor="middle" fill="#6b7280" font-size="9.5">被全模块依赖（唯一无出度模块）· start/api 经传递依赖</text>
+  <text x="505" y="639" text-anchor="middle" fill="#b45309" font-size="9.5">禁止：有状态逻辑 / Spring 依赖</text>
+
+  <!-- ===== 图例 ===== -->
+  <rect x="740" y="60" width="212" height="150" rx="8" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="752" y="82" fill="#111827" font-size="11" font-weight="700">图例</text>
+  <line x1="752" y1="100" x2="770" y2="100" stroke="#2563eb" stroke-width="1.6"/>
+  <text x="778" y="104" fill="#374151" font-size="9">调用链依赖（→）</text>
+  <line x1="752" y1="124" x2="770" y2="124" stroke="#7c3aed" stroke-width="1.6"/>
+  <text x="778" y="128" fill="#374151" font-size="9">端口实现（P3 依赖倒置）</text>
+  <line x1="752" y1="148" x2="770" y2="148" stroke="#0d9488" stroke-width="1.4"/>
+  <text x="778" y="152" fill="#374151" font-size="9">公共契约（→ common）</text>
+  <rect x="752" y="168" width="18" height="12" rx="3" fill="#fffbeb" stroke="#f59e0b" stroke-width="1"/>
+  <text x="778" y="178" fill="#374151" font-size="9">domain 核心（P1）</text>
+
+  <!-- ===== 底部注解 ===== -->
+  <text x="500" y="680" text-anchor="middle" fill="#6b7280" font-size="11">依赖方向（P2 单向无环）：start → api → application → domain ← infrastructure；ArchUnit 编译期守护 domain 纯度与分层无环</text>
 </svg>
