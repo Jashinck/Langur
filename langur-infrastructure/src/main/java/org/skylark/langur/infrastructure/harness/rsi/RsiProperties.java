@@ -29,6 +29,9 @@ public class RsiProperties {
     /** R3 技能自合成配置（{@code langur.rsi.synthesis.*}，RsiProperties/RsiConfiguration 共用）。 */
     private Synthesis synthesis = new Synthesis();
 
+    /** R-G 安全平面配置（{@code langur.rsi.governance.*}，RsiProperties/RsiConfiguration 共用）。 */
+    private Governance governance = new Governance();
+
     /**
      * R1 反思自检（RSI L1，{@code langur.rsi.reflection.*}）。
      * <p>{@code enabled} 默认 {@code false}；需与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
@@ -89,5 +92,28 @@ public class RsiProperties {
 
         /** 越权审查白名单：合成技能可引用的工具 ID 集（缺省空）。 */
         private java.util.List<String> allowedToolIds = new java.util.ArrayList<>();
+    }
+
+    /**
+     * R-G 安全平面配置（P0，{@code langur.rsi.governance.*}）。
+     * <p>{@code enabled} 默认 {@code false}；与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
+     * {@code RsiSafetyPlane} + 缺省内存提案仓库。{@code maxDepth} 递归深度上限、{@code maxProposalsPerMinute}
+     * 变更频率限流、{@code forbiddenTargetPrefixes} 权限隔离红线（安全策略层/校验链，不可改）。</p>
+     */
+    @Data
+    public static class Governance {
+
+        /** 安全平面装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
+        private boolean enabled = false;
+
+        /** 递归深度上限（自改进链深度超此值拒绝）。 */
+        private int maxDepth = 3;
+
+        /** 变更频率限流（滑动 60s 窗口内最大提案数）。 */
+        private int maxProposalsPerMinute = 10;
+
+        /** 权限隔离红线：禁止改动的目标前缀（SecurityPolicySPI / 四层校验链）。 */
+        private java.util.List<String> forbiddenTargetPrefixes =
+                new java.util.ArrayList<>(java.util.List.of("security.policy", "validation."));
     }
 }
