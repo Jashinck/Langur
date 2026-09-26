@@ -44,4 +44,20 @@ public class AgentDispatcher {
         }
         return bus.poll(agentId);
     }
+
+    /** 子 Agent 回发结果到请求方（H12 执行接缝：SUB_AGENT 步骤的汇聚侧，与 {@link #dispatch} 对称）。 */
+    public void respond(String fromAgentId, String toAgentId, String taskId, String result,
+                        AgentMessageBus bus) {
+        if (fromAgentId == null || fromAgentId.isBlank() || toAgentId == null || toAgentId.isBlank()) {
+            throw new IllegalArgumentException("respond from/to agentId must not be blank");
+        }
+        if (taskId == null || taskId.isBlank()) {
+            throw new IllegalArgumentException("respond taskId must not be blank");
+        }
+        if (bus == null) {
+            throw new IllegalArgumentException("AgentMessageBus must not be null");
+        }
+        bus.publish(AgentMessage.of(fromAgentId, toAgentId, taskId,
+                result == null ? "" : result, System.currentTimeMillis()));
+    }
 }
