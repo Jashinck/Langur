@@ -5,6 +5,7 @@ import org.skylark.langur.domain.harness.rsi.MemoryDistiller;
 import org.skylark.langur.domain.harness.rsi.ReplayEngine;
 import org.skylark.langur.domain.harness.rsi.RsiProposalRepository;
 import org.skylark.langur.domain.harness.rsi.RsiSafetyPlane;
+import org.skylark.langur.domain.harness.rsi.StrategyOptimizer;
 import org.skylark.langur.domain.harness.rsi.TemplateDistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryRsiProposalRepository;
@@ -123,5 +124,13 @@ public class RsiConfiguration {
                 properties.getGovernance().getMaxDepth(),
                 properties.getGovernance().getMaxProposalsPerMinute(),
                 properties.getGovernance().getForbiddenTargetPrefixes());
+    }
+
+    /** 策略自优化器（R4）：R0 回放择优 + THRESHOLD 提案 + 劣化自动回滚（达 D3）。 */
+    @Bean
+    @ConditionalOnProperty(name = "langur.rsi.optimization.enabled", havingValue = "true")
+    public StrategyOptimizer strategyOptimizer(ReplayEngine replayEngine) {
+        log.info("[RSI] assembling R4 strategy optimizer (replay bandit + threshold tuning + auto-rollback)");
+        return new StrategyOptimizer(replayEngine);
     }
 }

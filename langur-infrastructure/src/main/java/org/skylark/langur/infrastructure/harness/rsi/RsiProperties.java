@@ -32,6 +32,9 @@ public class RsiProperties {
     /** R-G 安全平面配置（{@code langur.rsi.governance.*}，RsiProperties/RsiConfiguration 共用）。 */
     private Governance governance = new Governance();
 
+    /** R4 策略自优化配置（{@code langur.rsi.optimization.*}，RsiProperties/RsiConfiguration 共用）。 */
+    private Optimization optimization = new Optimization();
+
     /**
      * R1 反思自检（RSI L1，{@code langur.rsi.reflection.*}）。
      * <p>{@code enabled} 默认 {@code false}；需与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
@@ -115,5 +118,17 @@ public class RsiProperties {
         /** 权限隔离红线：禁止改动的目标前缀（SecurityPolicySPI / 四层校验链）。 */
         private java.util.List<String> forbiddenTargetPrefixes =
                 new java.util.ArrayList<>(java.util.List.of("security.policy", "validation."));
+    }
+
+    /**
+     * R4 策略自优化配置（RSI L4 → D3，{@code langur.rsi.optimization.*}）。
+     * <p>{@code enabled} 默认 {@code false}；与总开关 {@code langur.rsi.enabled=true} 同时成立才装配
+     * {@code StrategyOptimizer}（R0 回放择优 + THRESHOLD 提案 + 劣化自动回滚）。</p>
+     */
+    @Data
+    public static class Optimization {
+
+        /** 策略自优化装配开关，默认关（P11 暂停态；与总开关 AND 后生效）。 */
+        private boolean enabled = false;
     }
 }

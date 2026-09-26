@@ -5,6 +5,7 @@ import org.skylark.langur.domain.harness.rsi.MemoryDistiller;
 import org.skylark.langur.domain.harness.rsi.ReplayEngine;
 import org.skylark.langur.domain.harness.rsi.RsiProposalRepository;
 import org.skylark.langur.domain.harness.rsi.RsiSafetyPlane;
+import org.skylark.langur.domain.harness.rsi.StrategyOptimizer;
 import org.skylark.langur.domain.harness.rsi.TemplateDistillationExtractor;
 import org.skylark.langur.domain.harness.rsi.TrajectoryRepository;
 import org.skylark.langur.infrastructure.harness.rsi.InMemoryRsiProposalRepository;
@@ -42,6 +43,7 @@ class RsiConfigurationTest {
         assertFalse(new RsiProperties().getDistillation().isEnabled(), "R2 蒸馏默认关闭");
         assertFalse(new RsiProperties().getSynthesis().isEnabled(), "R3 合成默认关闭");
         assertFalse(new RsiProperties().getGovernance().isEnabled(), "R-G 安全平面默认关闭");
+        assertFalse(new RsiProperties().getOptimization().isEnabled(), "R4 策略自优化默认关闭");
     }
 
     @Test
@@ -116,5 +118,10 @@ class RsiConfigurationTest {
         assertEquals(10, g.getMaxProposalsPerMinute());
         assertNotNull(g.getForbiddenTargetPrefixes());
         assertFalse(g.getForbiddenTargetPrefixes().isEmpty(), "权限隔离红线缺省应含 security.policy/validation.");
+    }
+
+    @Test
+    void shouldAssembleStrategyOptimizer() {
+        assertInstanceOf(StrategyOptimizer.class, configuration.strategyOptimizer(configuration.replayEngine()));
     }
 }
