@@ -14,6 +14,8 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -31,6 +33,9 @@ public class LlmGateway {
     private final LLMPort llmPort;
     private final LlmProperties properties;
     private final MeterRegistry meterRegistry;
+
+    /** H13.7 每 provider 独立熔断器（懒建，key=provider 名）。 */
+    private final ConcurrentMap<String, ProviderCircuitBreaker> breakers = new ConcurrentHashMap<>();
 
     public LlmGateway(LLMPort llmPort, LlmProperties properties) {
         this(llmPort, properties, (MeterRegistry) null);
@@ -86,6 +91,8 @@ public class LlmGateway {
 
     /**
      * 主备降级执行：按 [主模型 + 备用链] 依次尝试，成功即返回，全部失败抛出最后一次异常。
+     * <p>H13.7：每 provider 独立熔断——跳闸冷却期内的 provider 快速跳过（不再反复触发慢超时），
+     * 成功复位、失败重新跳闸；熔断配置经 {@code langur.llm.circuit-breaker.*}（缺省启用）。</p>
      */
     private <T> T withFallback(ModelRole role, Function<String, T> invocation) {
         String primary = resolveModel(role);
@@ -98,17 +105,80 @@ public class LlmGateway {
         }
         RuntimeException lastError = null;
         for (String model : chain) {
+            String provider = properties.providerOf(model);
+            ProviderCircuitBreaker breaker = breakerFor(provider);
+            if (breaker != null && breaker.isOpen()) {
+                recordCircuitSkip(provider, model);
+                log.warn("[LLM] provider [{}] circuit open, fast-skipping model [{}] for role [{}]",
+                        provider, model, role);
+                continue;
+            }
             try {
-                return invocation.apply(model);
+                T result = invocation.apply(model);
+                if (breaker != null) {
+                    breaker.recordSuccess();
+                }
+                return result;
             } catch (RuntimeException e) {
                 lastError = e;
+                if (breaker != null) {
+                    breaker.recordFailure();
+                    if (breaker.isOpen()) {
+                        recordCircuitOpen(provider);
+                    }
+                }
                 recordFallback(role, model, e);
                 log.warn("[LLM] model [{}] failed for role [{}], trying next in fallback chain: {}",
                         model, role, e.getMessage());
             }
         }
+        if (lastError == null) {
+            throw new IllegalStateException(
+                    "All providers circuit-open for role [" + role + "]: " + chain);
+        }
         throw new IllegalStateException(
                 "All models in fallback chain exhausted for role [" + role + "]: " + chain, lastError);
+    }
+
+    /** H13.7：按 provider 懒建熔断器；熔断关闭时返回 null（调用方走既有降级路径）。 */
+    private ProviderCircuitBreaker breakerFor(String provider) {
+        LlmProperties.CircuitBreaker config = properties.getCircuitBreaker();
+        if (config == null || !config.isEnabled()) {
+            return null;
+        }
+        return breakers.computeIfAbsent(provider, p -> new ProviderCircuitBreaker(
+                p, config.getThreshold(), config.getCooldownSeconds() * 1000L));
+    }
+
+    /** H13.7：熔断跳闸事件计数（provider 标签，接 H5）。 */
+    private void recordCircuitOpen(String provider) {
+        if (meterRegistry == null) {
+            return;
+        }
+        try {
+            Counter.builder("langur.harness.llm_provider_circuit_open_count")
+                    .tag("provider", provider)
+                    .register(meterRegistry)
+                    .increment();
+        } catch (RuntimeException e) {
+            log.debug("[LLM] circuit-open metric record failed, dropped", e);
+        }
+    }
+
+    /** H13.7：熔断快速跳过计数（provider/model 标签，接 H5）。 */
+    private void recordCircuitSkip(String provider, String model) {
+        if (meterRegistry == null) {
+            return;
+        }
+        try {
+            Counter.builder("langur.harness.llm_provider_circuit_skip_count")
+                    .tag("provider", provider)
+                    .tag("model", model)
+                    .register(meterRegistry)
+                    .increment();
+        } catch (RuntimeException e) {
+            log.debug("[LLM] circuit-skip metric record failed, dropped", e);
+        }
     }
 
     /** 降级触发计数（H13.4，接 H5）：修复前适配器吞异常导致该指标恒 0。 */

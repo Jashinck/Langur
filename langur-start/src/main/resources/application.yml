@@ -89,6 +89,11 @@ langur:
     fallback-chains:
       gpt-4o: [deepseek-chat, qwen-max]
       gemini-1.5-pro: [gpt-4o]
+    # H13.7 provider 健康熔断（缺省启用）：连续失败达阈值跳闸，冷却期内快速降级不阻塞，冷却后试探恢复
+    circuit-breaker:
+      enabled: true          # 熔断开关（关闭则行为同 H13.4 纯降级）
+      threshold: 3           # 连续失败次数达此值跳闸
+      cooldown-seconds: 30   # 跳闸冷却秒数（期内快速降级，冷却后放行试探）
   # C 组件 L4 向量存储：memory（默认，可测试）| pgvector（生产，需独立 vectorJdbcTemplate 数据源）| elasticsearch | milvus
   vector:
     store: memory
