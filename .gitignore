@@ -5,3 +5,6 @@
 /langur-application/target/
 /langur-api/target/
 /.idea/
+
+# IntelliJ IDEA 模块文件（本地生成，不纳入版本控制）
+*.iml
