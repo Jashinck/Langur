@@ -9,6 +9,7 @@ import org.skylark.langur.domain.harness.state.TaskState;
 import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
 import org.skylark.langur.domain.model.plan.StepStatus;
@@ -206,10 +207,10 @@ class PlanAndExecuteExecutionLoopTest {
         }
 
         private String lastUser(Agent agent) {
-            List<Map<String, String>> history = agent.getConversationHistory();
-            for (int i = history.size() - 1; i >= 0; i--) {
-                if ("user".equals(history.get(i).get("role"))) {
-                    String content = history.get(i).get("content");
+            List<SessionEvent> events = agent.getSessionEvents();
+            for (int i = events.size() - 1; i >= 0; i--) {
+                if (events.get(i).type() == SessionEvent.Type.USER) {
+                    String content = events.get(i).content();
                     return content.startsWith("[子目标] ") ? content.substring("[子目标] ".length()) : content;
                 }
             }

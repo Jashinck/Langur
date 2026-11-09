@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.llm;
 
 import org.junit.jupiter.api.Test;
 import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 
@@ -22,7 +23,7 @@ class LlmGatewayTest {
 
         @Override
         public LLMDecision decide(String systemPrompt, String model,
-                                  List<Map<String, String>> history, List<Tool> tools) {
+                                  List<SessionEvent> sessionEvents, List<Tool> tools) {
             calledModels.add(model);
             if (model.startsWith("bad")) {
                 throw new RuntimeException("model down: " + model);

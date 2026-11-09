@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.harness.context.vector.EmbeddingProperties;
 import org.skylark.langur.infrastructure.harness.context.vector.LlmEmbeddingPort;
@@ -197,7 +198,7 @@ class ModelProviderSecretResolutionTest {
     private static class NoopPort implements LLMPort {
         @Override
         public LLMDecision decide(String systemPrompt, String model,
-                                  List<Map<String, String>> history, List<Tool> tools) {
+                                  List<SessionEvent> sessionEvents, List<Tool> tools) {
             throw new UnsupportedOperationException();
         }
 

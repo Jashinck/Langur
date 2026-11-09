@@ -27,6 +27,7 @@ import org.skylark.langur.domain.harness.state.TaskState;
 import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.harness.state.TaskStateStatus;
 import org.skylark.langur.domain.model.agent.Agent;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
 import org.skylark.langur.domain.port.DecisionPort;
@@ -143,6 +144,13 @@ public class ReActExecutionLoop implements ExecutionLoopService {
                 StateSnapshot latest = state.latestSnapshot();
                 task.resumeFromRound(latest.getRound());
                 agent.resumeIteration(readIteration(latest));
+                // H15.3：消息级续跑一致性守卫——快照事件游标与恢复后 Agent 事件日志必须对齐，失配即 fail-fast
+                long eventCursor = readEventCursor(latest);
+                if (eventCursor >= 0 && eventCursor != agent.getSessionEvents().size()) {
+                    task.terminate("Snapshot event cursor mismatch: snapshot=" + eventCursor
+                            + ", restored=" + agent.getSessionEvents().size());
+                    return task;
+                }
             }
         } else {
             state = TaskState.init(task.getTaskId());
@@ -160,9 +168,9 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         try (ExecutionSpan span = startSpan(SpanType.CONTEXT, "context.assemble")) {
             span.setAttribute("taskId", task.getTaskId());
             assembleContext(task, agent);
-            span.setAttribute("messageCount", (long) agent.getConversationHistory().size());
+            span.setAttribute("messageCount", (long) agent.getSessionEvents().size());
         }
-        fire(HookPoint.AFTER_CONTEXT_ASSEMBLE, task, agent.getConversationHistory().size() + " messages");
+        fire(HookPoint.AFTER_CONTEXT_ASSEMBLE, task, agent.getSessionEvents().size() + " messages");
 
         // [E] 闸门 Token 维度：初始上下文尚无 LLM 调用，按字符数估算计入消耗（H1：后续每轮优先用真实 usage）
         task.addTokens(estimateTokens(agent));
@@ -434,11 +442,10 @@ public class ReActExecutionLoop implements ExecutionLoopService {
      * 无用户消息时降级为系统提示词。
      */
     private String inferencePayload(Agent agent) {
-        List<Map<String, String>> history = agent.getConversationHistory();
-        for (int i = history.size() - 1; i >= 0; i--) {
-            Map<String, String> message = history.get(i);
-            if ("user".equalsIgnoreCase(message.get("role"))) {
-                return message.get("content");
+        List<SessionEvent> events = agent.getSessionEvents();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).type() == SessionEvent.Type.USER) {
+                return events.get(i).content();
             }
         }
         return agent.getConfig().getSystemPrompt();
@@ -447,6 +454,12 @@ public class ReActExecutionLoop implements ExecutionLoopService {
     private int readIteration(StateSnapshot snapshot) {
         Object iteration = snapshot.getPayload() != null ? snapshot.getPayload().get("iteration") : null;
         return iteration instanceof Number ? ((Number) iteration).intValue() : 0;
+    }
+
+    /** H15.3：读取快照事件游标（消息级续跑一致性）；缺失返回 -1（旧快照，不校验）。 */
+    private long readEventCursor(StateSnapshot snapshot) {
+        Object cursor = snapshot.getPayload() != null ? snapshot.getPayload().get("eventCursor") : null;
+        return cursor instanceof Number ? ((Number) cursor).longValue() : -1L;
     }
 
     private ExecutionTask finishAborted(ExecutionTask task, TaskState state, String reason) {
@@ -474,8 +487,8 @@ public class ReActExecutionLoop implements ExecutionLoopService {
      * Token 估算（约 4 字符/Token）：LLM 接入真实 usage 返回前的兜底计量（D3 决策）
      */
     private long estimateTokens(Agent agent) {
-        return agent.getConversationHistory().stream()
-                .mapToLong(message -> String.valueOf(message.get("content")).length() / 4L + 1L)
+        return agent.getSessionEvents().stream()
+                .mapToLong(event -> event.content().length() / 4L + 1L)
                 .sum();
     }
 
@@ -499,6 +512,8 @@ public class ReActExecutionLoop implements ExecutionLoopService {
         payload.put("agentStatus", agent.getStatus().name());
         payload.put("iteration", agent.getIterationCount());
         payload.put("planSteps", plan.getSteps().size());
+        // H15.3：事件日志游标（已消费事件数），支撑消息级续跑一致性守卫
+        payload.put("eventCursor", agent.getEventSequence());
         return payload;
     }
 

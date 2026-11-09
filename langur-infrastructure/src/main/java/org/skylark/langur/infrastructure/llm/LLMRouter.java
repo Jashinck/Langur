@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.llm;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
@@ -9,7 +10,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 @Component
@@ -22,10 +22,10 @@ public class LLMRouter implements LLMPort {
 
     @Override
     public LLMDecision decide(String systemPrompt, String model,
-                              List<Map<String, String>> conversationHistory,
+                              List<SessionEvent> sessionEvents,
                               List<Tool> availableTools) {
         String resolvedModel = resolveModel(model);
-        return route(resolvedModel).decide(systemPrompt, resolvedModel, conversationHistory, availableTools);
+        return route(resolvedModel).decide(systemPrompt, resolvedModel, sessionEvents, availableTools);
     }
 
     @Override

@@ -4,6 +4,7 @@ import org.skylark.langur.application.stream.TaskProgressBus;
 import org.skylark.langur.common.cache.DistributedLock;
 import org.skylark.langur.domain.harness.context.AgentContextRepository;
 import org.skylark.langur.domain.harness.context.ContextAssembler;
+import org.skylark.langur.domain.harness.context.ContextBuilder;
 import org.skylark.langur.domain.harness.context.vector.EmbeddingPort;
 import org.skylark.langur.domain.harness.context.vector.FusionMode;
 import org.skylark.langur.domain.harness.context.vector.HybridSearchOptions;
@@ -82,13 +83,16 @@ public class HarnessConfiguration {
                                                  AgentContextRepository contextRepository,
                                                  ExecutionTracer executionTracer,
                                                  ObjectProvider<DecisionPort> decisionPortProvider,
-                                                 ObjectProvider<DecisionProperties> decisionPropertiesProvider) {
+                                                 ObjectProvider<DecisionProperties> decisionPropertiesProvider,
+                                                 ObjectProvider<ContextBuilder> contextBuilderProvider) {
         // 将钩子引擎织入领域服务，覆盖 BEFORE/AFTER_TOOL_CALL 拦截点
         agentDomainService.attachHookEngine(hookEngine);
         // 将 T 组件统一调度器织入领域服务：工具调用必经四层校验链 + 沙箱（§1.2 模型与环境隔离）
         agentDomainService.attachToolDispatcher(toolDispatcher);
         // 织入容错能力（T7）：工具重试策略 + LLM/工具降级策略
         agentDomainService.attachResilience(RetryPolicy.defaults(), new DefaultFallbackStrategy());
+        // 织入上下文构建器（H15.2）：推理前规则 elision + head/tail 截断；缺失时 P10 回退原始事件
+        agentDomainService.attachContextBuilder(contextBuilderProvider.getIfAvailable());
         ReActExecutionLoop loop = new ReActExecutionLoop(agentDomainService, hookEngine, taskStateRepository,
                 evaluationService, contextAssembler, contextRepository);
         // 织入循环检测器（T7）：连续 N 轮指纹重复超阈值强制终止（LOOP_DETECTED）

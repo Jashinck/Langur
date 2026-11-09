@@ -11,6 +11,7 @@ import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.model.tool.ToolDefinition;
 import org.skylark.langur.domain.model.tool.ToolResult;
 import org.skylark.langur.domain.port.DefaultFallbackStrategy;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 
 import java.util.List;
@@ -60,7 +61,7 @@ class AgentDomainServiceResilienceTest {
         LLMPort throwing = new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> history, List<Tool> tools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> tools) {
                 throw new RuntimeException("boom");
             }
 
@@ -87,7 +88,7 @@ class AgentDomainServiceResilienceTest {
         return new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> history, List<Tool> tools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> tools) {
                 return LLMDecision.toolCall("thinking", "flaky", Map.of("input", "x"));
             }
 

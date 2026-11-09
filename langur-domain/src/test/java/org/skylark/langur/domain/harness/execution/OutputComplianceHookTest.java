@@ -10,6 +10,7 @@ import org.skylark.langur.domain.harness.state.TaskState;
 import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
@@ -75,7 +76,7 @@ class OutputComplianceHookTest {
         LLMPort answer = new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> history, List<Tool> tools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> tools) {
                 return LLMDecision.finalAnswer("token secret-123");
             }
 
@@ -99,10 +100,10 @@ class OutputComplianceHookTest {
     }
 
     private String lastAssistantMessage(Agent agent) {
-        List<Map<String, String>> history = agent.getConversationHistory();
-        for (int i = history.size() - 1; i >= 0; i--) {
-            if ("assistant".equals(history.get(i).get("role"))) {
-                return history.get(i).get("content");
+        List<SessionEvent> events = agent.getSessionEvents();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).type() == SessionEvent.Type.ASSISTANT) {
+                return events.get(i).content();
             }
         }
         return null;

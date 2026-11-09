@@ -6,11 +6,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.domain.model.message.SessionEvent;
+import org.skylark.langur.domain.model.message.ToolCall;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,7 +60,7 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
     @Override
     public LLMDecision decide(String systemPrompt,
                               String model,
-                              List<Map<String, String>> conversationHistory,
+                              List<SessionEvent> sessionEvents,
                               List<Tool> availableTools) {
         try {
             ObjectNode requestBody = objectMapper.createObjectNode();
@@ -68,9 +71,8 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
             sysMsg.put("role", "system");
             sysMsg.put("content", systemPrompt);
 
-            for (Map<String, String> msg : conversationHistory) {
-                ObjectNode msgNode = messages.addObject();
-                msg.forEach(msgNode::put);
+            for (SessionEvent event : sessionEvents) {
+                appendMessage(messages, event);
             }
 
             if (!availableTools.isEmpty()) {
@@ -97,6 +99,45 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
             return parseDecision(response);
         } catch (Exception e) {
             throw providerException("decide", e);
+        }
+    }
+
+    /**
+     * 会话事件 → OpenAI 兼容消息（H15.1）：assistant 携带原生 {@code tool_calls}，
+     * tool 结果以 {@code tool_call_id} 回指，修复多轮 ReAct 对真实 provider 的 400。
+     */
+    private void appendMessage(ArrayNode messages, SessionEvent event) {
+        ObjectNode msgNode = messages.addObject();
+        switch (event.type()) {
+            case USER -> {
+                msgNode.put("role", "user");
+                msgNode.put("content", event.content());
+            }
+            case ASSISTANT -> {
+                msgNode.put("role", "assistant");
+                if (!event.content().isBlank()) {
+                    msgNode.put("content", event.content());
+                }
+                if (!event.toolCalls().isEmpty()) {
+                    ArrayNode toolCalls = msgNode.putArray("tool_calls");
+                    for (ToolCall call : event.toolCalls()) {
+                        ObjectNode callNode = toolCalls.addObject();
+                        callNode.put("id", call.id());
+                        callNode.put("type", "function");
+                        ObjectNode fn = callNode.putObject("function");
+                        fn.put("name", call.name());
+                        fn.set("arguments", objectMapper.valueToTree(call.arguments()));
+                    }
+                }
+            }
+            case TOOL -> {
+                msgNode.put("role", "tool");
+                msgNode.put("tool_call_id", event.toolCallId());
+                if (!event.name().isBlank()) {
+                    msgNode.put("name", event.name());
+                }
+                msgNode.put("content", event.content());
+            }
         }
     }
 
@@ -192,15 +233,19 @@ public abstract class AbstractOpenAICompatibleLLMAdapter implements ModelRoutabl
 
         JsonNode toolCalls = message.get("tool_calls");
         if (toolCalls != null && toolCalls.isArray() && !toolCalls.isEmpty()) {
-            JsonNode call = toolCalls.get(0);
-            String toolName = call.at("/function/name").asText();
-            String argsJson = call.at("/function/arguments").asText();
-            Map<String, Object> args = StringUtils.isBlank(argsJson)
-                    ? Map.of()
-                    : objectMapper.readValue(argsJson, Map.class);
+            List<ToolCall> calls = new ArrayList<>();
+            for (JsonNode call : toolCalls) {
+                String id = call.path("id").asText("");
+                String toolName = call.at("/function/name").asText();
+                String argsJson = call.at("/function/arguments").asText();
+                Map<String, Object> args = StringUtils.isBlank(argsJson)
+                        ? Map.of()
+                        : objectMapper.readValue(argsJson, Map.class);
+                calls.add(ToolCall.of(id, toolName, args));
+            }
             String thought = message.has("content") && !message.get("content").isNull()
-                    ? message.get("content").asText() : "Calling tool: " + toolName;
-            return LLMDecision.toolCall(thought, toolName, args, usage);
+                    ? message.get("content").asText() : "Calling tool: " + calls.get(0).name();
+            return LLMDecision.toolCall(thought, calls, usage);
         }
 
         return LLMDecision.finalAnswer(message.at("/content").asText(), usage);

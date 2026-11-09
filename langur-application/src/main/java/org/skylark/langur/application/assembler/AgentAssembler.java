@@ -2,10 +2,10 @@ package org.skylark.langur.application.assembler;
 
 import org.skylark.langur.application.dto.AgentResult;
 import org.skylark.langur.domain.model.agent.Agent;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class AgentAssembler {
@@ -30,11 +30,10 @@ public class AgentAssembler {
      * 提取最终答案：会话历史中最后一条 assistant 消息（markCompleted 时写入）。
      */
     private String extractFinalAnswer(Agent agent) {
-        List<Map<String, String>> history = agent.getConversationHistory();
-        for (int i = history.size() - 1; i >= 0; i--) {
-            Map<String, String> message = history.get(i);
-            if ("assistant".equals(message.get("role"))) {
-                return message.get("content");
+        List<SessionEvent> events = agent.getSessionEvents();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).type() == SessionEvent.Type.ASSISTANT) {
+                return events.get(i).content();
             }
         }
         return null;

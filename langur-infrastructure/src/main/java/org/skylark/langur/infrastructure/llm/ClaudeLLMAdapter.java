@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.domain.model.message.SessionEvent;
+import org.skylark.langur.domain.model.message.ToolCall;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
@@ -54,10 +56,10 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
 
     @Override
     public LLMPort.LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> conversationHistory,
+                                      List<SessionEvent> sessionEvents,
                                       List<Tool> availableTools) {
         try {
-            ObjectNode requestBody = buildBaseRequest(systemPrompt, resolveModel(model), conversationHistory);
+            ObjectNode requestBody = buildBaseRequest(systemPrompt, resolveModel(model), sessionEvents);
             if (!availableTools.isEmpty()) {
                 ArrayNode toolsNode = requestBody.putArray("tools");
                 for (Tool tool : availableTools) {
@@ -99,20 +101,51 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
     }
 
     private ObjectNode buildBaseRequest(String systemPrompt, String model,
-                                        List<Map<String, String>> conversationHistory) {
+                                        List<SessionEvent> sessionEvents) {
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", model);
         requestBody.put("max_tokens", 4096);
         requestBody.put("system", systemPrompt);
         ArrayNode messages = requestBody.putArray("messages");
-        for (Map<String, String> message : conversationHistory) {
-            String role = message.getOrDefault("role", "user");
-            ObjectNode messageNode = messages.addObject();
-            messageNode.put("role", mapRole(role));
-            ArrayNode content = messageNode.putArray("content");
-            content.addObject().put("type", "text").put("text", mapContent(message));
+        for (SessionEvent event : sessionEvents) {
+            appendMessage(messages, event);
         }
         return requestBody;
+    }
+
+    /**
+     * 会话事件 → Anthropic Messages 原生块（H15.1）：assistant 携带 {@code tool_use}，
+     * 工具结果以 {@code tool_result.tool_use_id} 回指，修复多轮工具调用的正确性。
+     */
+    private void appendMessage(ArrayNode messages, SessionEvent event) {
+        ObjectNode messageNode = messages.addObject();
+        ArrayNode content = messageNode.putArray("content");
+        switch (event.type()) {
+            case USER -> {
+                messageNode.put("role", "user");
+                content.addObject().put("type", "text").put("text", event.content());
+            }
+            case ASSISTANT -> {
+                messageNode.put("role", "assistant");
+                if (!event.content().isBlank()) {
+                    content.addObject().put("type", "text").put("text", event.content());
+                }
+                for (ToolCall call : event.toolCalls()) {
+                    ObjectNode use = content.addObject();
+                    use.put("type", "tool_use");
+                    use.put("id", call.id());
+                    use.put("name", call.name());
+                    use.set("input", objectMapper.valueToTree(call.arguments()));
+                }
+            }
+            case TOOL -> {
+                messageNode.put("role", "user");
+                ObjectNode result = content.addObject();
+                result.put("type", "tool_result");
+                result.put("tool_use_id", event.toolCallId());
+                result.put("content", event.content());
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -121,14 +154,18 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
         JsonNode content = root.path("content");
         LLMPort.TokenUsage usage = parseUsage(root);
         String thought = extractText(responseJson);
+        List<ToolCall> calls = new ArrayList<>();
         for (JsonNode node : content) {
             if ("tool_use".equals(node.path("type").asText())) {
-                return LLMDecision.toolCall(
-                        StringUtils.defaultIfBlank(thought, "Calling tool: " + node.path("name").asText()),
+                calls.add(ToolCall.of(
+                        node.path("id").asText(""),
                         node.path("name").asText(),
-                        objectMapper.convertValue(node.path("input"), Map.class),
-                        usage);
+                        objectMapper.convertValue(node.path("input"), Map.class)));
             }
+        }
+        if (!calls.isEmpty()) {
+            return LLMDecision.toolCall(
+                    StringUtils.defaultIfBlank(thought, "Calling tool: " + calls.get(0).name()), calls, usage);
         }
         return LLMDecision.finalAnswer(thought, usage);
     }
@@ -172,17 +209,5 @@ public class ClaudeLLMAdapter implements ModelRoutableLLMPort {
 
     private String resolveModel(String model) {
         return StringUtils.defaultIfBlank(model, providerProperties.getModel());
-    }
-
-    private String mapRole(String role) {
-        return "assistant".equals(role) ? "assistant" : "user";
-    }
-
-    private String mapContent(Map<String, String> message) {
-        if ("tool".equals(message.get("role"))) {
-            return "Tool " + message.getOrDefault("name", "unknown") + " returned: "
-                    + message.getOrDefault("content", "");
-        }
-        return message.getOrDefault("content", "");
     }
 }

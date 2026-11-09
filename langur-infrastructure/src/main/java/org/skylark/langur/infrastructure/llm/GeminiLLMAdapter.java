@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.domain.model.message.SessionEvent;
+import org.skylark.langur.domain.model.message.ToolCall;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
@@ -54,10 +56,10 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
 
     @Override
     public LLMPort.LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> conversationHistory,
+                                      List<SessionEvent> sessionEvents,
                                       List<Tool> availableTools) {
         try {
-            ObjectNode requestBody = buildRequest(systemPrompt, conversationHistory, availableTools);
+            ObjectNode requestBody = buildRequest(systemPrompt, sessionEvents, availableTools);
             String response = execute(resolveModel(model), requestBody);
             return parseDecision(response);
         } catch (Exception e) {
@@ -68,7 +70,7 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
     @Override
     public String complete(String systemPrompt, String model, String userMessage) {
         try {
-            ObjectNode requestBody = buildRequest(systemPrompt, List.of(Map.of("role", "user", "content", userMessage)), List.of());
+            ObjectNode requestBody = buildRequest(systemPrompt, List.of(SessionEvent.user(0L, userMessage)), List.of());
             String response = execute(resolveModel(model), requestBody);
             return extractText(response);
         } catch (Exception e) {
@@ -85,7 +87,7 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
         return new ModelProviderException(getProviderName(), operation, cause);
     }
 
-    private ObjectNode buildRequest(String systemPrompt, List<Map<String, String>> conversationHistory,
+    private ObjectNode buildRequest(String systemPrompt, List<SessionEvent> sessionEvents,
                                     List<Tool> availableTools) {
         ObjectNode requestBody = objectMapper.createObjectNode();
         ObjectNode systemInstruction = requestBody.putObject("systemInstruction");
@@ -93,11 +95,32 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
         sysParts.addObject().put("text", systemPrompt);
 
         ArrayNode contents = requestBody.putArray("contents");
-        for (Map<String, String> message : conversationHistory) {
+        for (SessionEvent event : sessionEvents) {
             ObjectNode messageNode = contents.addObject();
-            messageNode.put("role", "assistant".equals(message.get("role")) ? "model" : "user");
             ArrayNode parts = messageNode.putArray("parts");
-            parts.addObject().put("text", mapContent(message));
+            switch (event.type()) {
+                case USER -> {
+                    messageNode.put("role", "user");
+                    parts.addObject().put("text", event.content());
+                }
+                case ASSISTANT -> {
+                    messageNode.put("role", "model");
+                    if (!event.content().isBlank()) {
+                        parts.addObject().put("text", event.content());
+                    }
+                    for (ToolCall call : event.toolCalls()) {
+                        ObjectNode functionCall = parts.addObject().putObject("functionCall");
+                        functionCall.put("name", call.name());
+                        functionCall.set("args", objectMapper.valueToTree(call.arguments()));
+                    }
+                }
+                case TOOL -> {
+                    messageNode.put("role", "user");
+                    ObjectNode functionResponse = parts.addObject().putObject("functionResponse");
+                    functionResponse.put("name", event.name());
+                    functionResponse.putObject("response").put("content", event.content());
+                }
+            }
         }
 
         if (!availableTools.isEmpty()) {
@@ -120,18 +143,21 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
         JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
         LLMPort.TokenUsage usage = parseUsage(root);
         List<String> texts = new ArrayList<>();
+        List<ToolCall> calls = new ArrayList<>();
         for (JsonNode part : parts) {
             if (part.has("functionCall")) {
                 JsonNode functionCall = part.path("functionCall");
-                return LLMDecision.toolCall(
-                        String.join("\n", texts),
+                calls.add(ToolCall.of(
+                        "",
                         functionCall.path("name").asText(),
-                        objectMapper.convertValue(functionCall.path("args"), Map.class),
-                        usage);
+                        objectMapper.convertValue(functionCall.path("args"), Map.class)));
             }
             if (part.has("text")) {
                 texts.add(part.path("text").asText());
             }
+        }
+        if (!calls.isEmpty()) {
+            return LLMDecision.toolCall(String.join("\n", texts), calls, usage);
         }
         return LLMDecision.finalAnswer(String.join("\n", texts), usage);
     }
@@ -185,13 +211,5 @@ public class GeminiLLMAdapter implements ModelRoutableLLMPort {
 
     private String resolveModel(String model) {
         return StringUtils.defaultIfBlank(model, providerProperties.getModel());
-    }
-
-    private String mapContent(Map<String, String> message) {
-        if ("tool".equals(message.get("role"))) {
-            return "Tool " + message.getOrDefault("name", "unknown") + " returned: "
-                    + message.getOrDefault("content", "");
-        }
-        return message.getOrDefault("content", "");
     }
 }

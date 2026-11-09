@@ -1,5 +1,7 @@
 package org.skylark.langur.domain.port;
 
+import org.skylark.langur.domain.model.message.SessionEvent;
+import org.skylark.langur.domain.model.message.ToolCall;
 import org.skylark.langur.domain.model.tool.Tool;
 
 import java.util.List;
@@ -12,7 +14,7 @@ public interface LLMPort {
 
     LLMDecision decide(String systemPrompt,
                        String model,
-                       List<Map<String, String>> conversationHistory,
+                       List<SessionEvent> sessionEvents,
                        List<Tool> availableTools);
 
     String complete(String systemPrompt, String model, String userMessage);
@@ -78,42 +80,54 @@ public interface LLMPort {
     class LLMDecision {
         private final boolean finalAnswer;
         private final String thought;
-        private final String toolName;
-        private final Map<String, Object> toolArguments;
+        private final List<ToolCall> toolCalls;
         private final String answer;
         private final TokenUsage usage;
 
         private LLMDecision(boolean finalAnswer, String thought,
-                             String toolName, Map<String, Object> toolArguments,
+                             List<ToolCall> toolCalls,
                              String answer, TokenUsage usage) {
             this.finalAnswer = finalAnswer;
             this.thought = thought;
-            this.toolName = toolName;
-            this.toolArguments = toolArguments;
+            this.toolCalls = toolCalls == null ? List.of() : List.copyOf(toolCalls);
             this.answer = answer;
             this.usage = usage;
         }
 
+        /** 单工具调用（无 provider id），便捷工厂。 */
         public static LLMDecision toolCall(String thought, String toolName, Map<String, Object> args) {
-            return new LLMDecision(false, thought, toolName, args, null, null);
+            return toolCall(thought, List.of(ToolCall.of(toolName, args)));
         }
 
+        /** 单工具调用（无 provider id），便捷工厂。 */
         public static LLMDecision toolCall(String thought, String toolName, Map<String, Object> args, TokenUsage usage) {
-            return new LLMDecision(false, thought, toolName, args, null, usage);
+            return toolCall(thought, List.of(ToolCall.of(toolName, args)), usage);
+        }
+
+        /** 原生工具调用列表（H15.1：并行/多工具调用全量保留，不再丢弃 tool_calls[1..n]）。 */
+        public static LLMDecision toolCall(String thought, List<ToolCall> toolCalls) {
+            return new LLMDecision(false, thought, toolCalls, null, null);
+        }
+
+        public static LLMDecision toolCall(String thought, List<ToolCall> toolCalls, TokenUsage usage) {
+            return new LLMDecision(false, thought, toolCalls, null, usage);
         }
 
         public static LLMDecision finalAnswer(String answer) {
-            return new LLMDecision(true, null, null, null, answer, null);
+            return new LLMDecision(true, null, null, answer, null);
         }
 
         public static LLMDecision finalAnswer(String answer, TokenUsage usage) {
-            return new LLMDecision(true, null, null, null, answer, usage);
+            return new LLMDecision(true, null, null, answer, usage);
         }
 
         public boolean isFinalAnswer() { return finalAnswer; }
         public String getThought() { return thought; }
-        public String getToolName() { return toolName; }
-        public Map<String, Object> getToolArguments() { return toolArguments; }
+        public List<ToolCall> getToolCalls() { return toolCalls; }
+        /** 首个工具名（单工具调用场景便捷访问；多工具调用应遍历 {@link #getToolCalls()}）。 */
+        public String getToolName() { return toolCalls.isEmpty() ? null : toolCalls.get(0).name(); }
+        /** 首个工具参数（同上便捷访问）。 */
+        public Map<String, Object> getToolArguments() { return toolCalls.isEmpty() ? Map.of() : toolCalls.get(0).arguments(); }
         public String getFinalAnswer() { return answer; }
         /** 本轮真实 Token 计量；provider 未回传时为 {@code null}（H1）。 */
         public TokenUsage getUsage() { return usage; }

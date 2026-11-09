@@ -9,6 +9,7 @@ import org.skylark.langur.domain.harness.context.MemoryLevel;
 import org.skylark.langur.domain.harness.context.TaskProfile;
 import org.skylark.langur.domain.harness.context.UserProfile;
 import org.skylark.langur.domain.model.agent.Agent;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -42,11 +43,19 @@ public class DefaultContextAssembler implements ContextAssembler {
 
         AgentContext context = AgentContext.create(traceId, userProfile, taskProfile, tokenBudget);
         appendIfBudgeted(context, MemoryLevel.L3_TASK, agent.getConfig().getSystemPrompt());
-        for (Map<String, String> message : agent.getConversationHistory()) {
+        for (SessionEvent event : agent.getSessionEvents()) {
             appendIfBudgeted(context, MemoryLevel.L2_SESSION,
-                    message.get("role") + ": " + message.get("content"));
+                    roleLabel(event.type()) + ": " + event.content());
         }
         return context;
+    }
+
+    private String roleLabel(SessionEvent.Type type) {
+        return switch (type) {
+            case USER -> "user";
+            case ASSISTANT -> "assistant";
+            case TOOL -> "tool";
+        };
     }
 
     private void appendIfBudgeted(AgentContext context, MemoryLevel level, String content) {

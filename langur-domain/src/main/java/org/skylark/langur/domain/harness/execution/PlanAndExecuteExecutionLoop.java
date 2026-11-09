@@ -14,6 +14,7 @@ import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.harness.state.TaskStateStatus;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentStatus;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
 import org.skylark.langur.domain.model.plan.StepStatus;
@@ -312,11 +313,11 @@ public class PlanAndExecuteExecutionLoop implements ExecutionLoopService {
     }
 
     private String lastMessageByRole(Agent agent, String role) {
-        List<Map<String, String>> history = agent.getConversationHistory();
-        for (int i = history.size() - 1; i >= 0; i--) {
-            Map<String, String> message = history.get(i);
-            if (role.equals(message.get("role"))) {
-                return message.get("content");
+        List<SessionEvent> events = agent.getSessionEvents();
+        SessionEvent.Type type = "user".equals(role) ? SessionEvent.Type.USER : SessionEvent.Type.ASSISTANT;
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).type() == type) {
+                return events.get(i).content();
             }
         }
         return "";

@@ -5,6 +5,7 @@ import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
 import org.skylark.langur.domain.model.agent.AgentStatus;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.repository.AgentRepository;
 import org.skylark.langur.infrastructure.persistence.jpa.JsonValueMapper;
 import org.skylark.langur.infrastructure.persistence.jpa.entity.AgentDO;
@@ -14,7 +15,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Repository
@@ -62,7 +62,7 @@ public class JpaAgentRepository implements AgentRepository {
         entity.setStatus(agent.getStatus().name());
         entity.setIterationCount(agent.getIterationCount());
         entity.setLastError(agent.getLastError());
-        entity.setConversationHistory(jsonValueMapper.write(agent.getConversationHistory()));
+        entity.setConversationHistory(jsonValueMapper.write(agent.getSessionEvents()));
         entity.setToolNames(jsonValueMapper.write(agent.getRegisteredToolNames()));
         entity.setCreatedAt(agent.getCreatedAt());
         entity.setUpdatedAt(agent.getUpdatedAt());
@@ -80,8 +80,8 @@ public class JpaAgentRepository implements AgentRepository {
                 .maxTokens(entity.getMaxTokens())
                 .build();
         List<String> toolNames = jsonValueMapper.read(entity.getToolNames(), new TypeReference<List<String>>() {}, new ArrayList<>());
-        List<Map<String, String>> history = jsonValueMapper.read(
-                entity.getConversationHistory(), new TypeReference<List<Map<String, String>>>() {}, new ArrayList<>());
+        List<SessionEvent> history = jsonValueMapper.read(
+                entity.getConversationHistory(), new TypeReference<List<SessionEvent>>() {}, new ArrayList<>());
         return Agent.restore(
                 AgentId.of(entity.getId()),
                 config,

@@ -1,6 +1,7 @@
 package org.skylark.langur.infrastructure.llm;
 
 import org.junit.jupiter.api.Test;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 
@@ -69,7 +70,7 @@ class LLMRouterTest {
         }
 
         @Override
-        public LLMDecision decide(String systemPrompt, String model, List<Map<String, String>> conversationHistory, List<org.skylark.langur.domain.model.tool.Tool> availableTools) {
+        public LLMDecision decide(String systemPrompt, String model, List<SessionEvent> sessionEvents, List<org.skylark.langur.domain.model.tool.Tool> availableTools) {
             this.lastModel = model;
             return LLMDecision.finalAnswer("ok");
         }

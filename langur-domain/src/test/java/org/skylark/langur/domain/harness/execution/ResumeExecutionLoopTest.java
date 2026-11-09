@@ -9,6 +9,7 @@ import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.domain.service.AgentDomainService;
 
@@ -65,7 +66,7 @@ class ResumeExecutionLoopTest {
         LLMPort immediateAnswer = new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> history, List<Tool> tools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> tools) {
                 return LLMDecision.finalAnswer("done");
             }
 

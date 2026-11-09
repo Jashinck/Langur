@@ -2,6 +2,7 @@ package org.skylark.langur.domain.service;
 
 import lombok.RequiredArgsConstructor;
 import org.skylark.langur.domain.harness.execution.RetryPolicy;
+import org.skylark.langur.domain.harness.context.ContextBuilder;
 import org.skylark.langur.domain.harness.lifecycle.HookAction;
 import org.skylark.langur.domain.harness.lifecycle.HookContext;
 import org.skylark.langur.domain.harness.lifecycle.HookPoint;
@@ -11,6 +12,8 @@ import org.skylark.langur.domain.harness.tool.ToolCallRequest;
 import org.skylark.langur.domain.harness.tool.ToolCallResult;
 import org.skylark.langur.domain.harness.tool.ToolDispatcher;
 import org.skylark.langur.domain.model.agent.Agent;
+import org.skylark.langur.domain.model.message.SessionEvent;
+import org.skylark.langur.domain.model.message.ToolCall;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
 import org.skylark.langur.domain.model.plan.StepStatus;
@@ -20,7 +23,6 @@ import org.skylark.langur.domain.port.FallbackStrategy;
 import org.skylark.langur.domain.port.LLMPort;
 
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -44,12 +46,22 @@ public class AgentDomainService {
     /** 降级策略（可选装配；LLM/工具失败时的兜底话术，T7） */
     private FallbackStrategy fallbackStrategy;
 
+    /** C 组件上下文构建器（H15.2，可选装配；缺失时 decide 直用原始事件日志，P10 行为不变） */
+    private ContextBuilder contextBuilder;
+
     public void attachHookEngine(LifecycleHookEngine hookEngine) {
         this.hookEngine = hookEngine;
     }
 
     public void attachToolDispatcher(ToolDispatcher toolDispatcher) {
         this.toolDispatcher = toolDispatcher;
+    }
+
+    /**
+     * 织入上下文构建器（H15.2）：推理前把会话事件裁剪进预算（规则 elision + head/tail 截断）。
+     */
+    public void attachContextBuilder(ContextBuilder contextBuilder) {
+        this.contextBuilder = contextBuilder;
     }
 
     /**
@@ -73,10 +85,13 @@ public class AgentDomainService {
 
         LLMPort.LLMDecision decision;
         try {
+            List<SessionEvent> promptEvents = contextBuilder != null
+                    ? contextBuilder.build(agent.getSessionEvents())
+                    : agent.getSessionEvents();
             decision = llmPort.decide(
                     agent.getConfig().getSystemPrompt(),
                     agent.getConfig().getModel(),
-                    agent.getConversationHistory(),
+                    promptEvents,
                     agent.getTools()
             );
         } catch (RuntimeException e) {
@@ -96,40 +111,49 @@ public class AgentDomainService {
             return decision.getFinalAnswer();
         }
 
-        PlanStep step = PlanStep.builder()
-                .index(agent.getIterationCount())
-                .thought(decision.getThought())
-                .action(decision.getToolName())
-                .actionInput(decision.getToolArguments())
-                .status(StepStatus.RUNNING)
-                .build();
-        plan.addStep(step);
-
-        Tool tool = agent.getTools().stream()
-                .filter(t -> t.getName().equals(decision.getToolName()))
-                .findFirst()
-                .orElse(null);
-
-        ToolResult result;
-        if (tool == null) {
-            result = ToolResult.failure("Tool not found: " + decision.getToolName());
-        } else if (isToolCallBlocked(agent, decision)) {
-            result = ToolResult.failure("Tool call rejected by lifecycle hook: " + decision.getToolName());
-        } else {
-            // [E] 工具执行 + 容错重试（§8.2 重试→降级）
-            result = executeWithRetry(agent, tool, decision);
+        List<ToolCall> toolCalls = decision.getToolCalls();
+        if (toolCalls.isEmpty()) {
+            // 模型既未给出最终答案也无工具调用：按空回答终止，避免死循环
+            agent.markCompleted("");
+            return "";
         }
-        fireToolHook(HookPoint.AFTER_TOOL_CALL, agent, decision.getToolName(), result.getEffectiveContent());
 
-        int lastIndex = plan.getSteps().size() - 1;
-        plan.updateStep(lastIndex, result.isSuccess()
-                ? step.withObservation(result.getContent())
-                : step.withFailure(result.getError()));
+        // H15.1：单条 assistant 事件携带全部原生 tool_calls，后续逐条 tool 结果回指 toolCallId
+        agent.addAssistantToolCalls(decision.getThought(), toolCalls);
 
-        agent.addAssistantMessage("Thought: " + decision.getThought() +
-                "\nAction: " + decision.getToolName() +
-                "\nAction Input: " + decision.getToolArguments());
-        agent.addToolResultMessage(decision.getToolName(), result.getEffectiveContent());
+        for (ToolCall call : toolCalls) {
+            PlanStep step = PlanStep.builder()
+                    .index(agent.getIterationCount())
+                    .thought(decision.getThought())
+                    .action(call.name())
+                    .actionInput(call.arguments())
+                    .status(StepStatus.RUNNING)
+                    .build();
+            plan.addStep(step);
+
+            Tool tool = agent.getTools().stream()
+                    .filter(t -> t.getName().equals(call.name()))
+                    .findFirst()
+                    .orElse(null);
+
+            ToolResult result;
+            if (tool == null) {
+                result = ToolResult.failure("Tool not found: " + call.name());
+            } else if (isToolCallBlocked(agent, call)) {
+                result = ToolResult.failure("Tool call rejected by lifecycle hook: " + call.name());
+            } else {
+                // [E] 工具执行 + 容错重试（§8.2 重试→降级）
+                result = executeWithRetry(agent, tool, call);
+            }
+            fireToolHook(HookPoint.AFTER_TOOL_CALL, agent, call.name(), result.getEffectiveContent());
+
+            int lastIndex = plan.getSteps().size() - 1;
+            plan.updateStep(lastIndex, result.isSuccess()
+                    ? step.withObservation(result.getContent())
+                    : step.withFailure(result.getError()));
+
+            agent.addToolResultMessage(call.id(), call.name(), result.getEffectiveContent());
+        }
 
         return null;
     }
@@ -137,39 +161,39 @@ public class AgentDomainService {
     /**
      * [L] BEFORE_TOOL_CALL 拦截：安全策略可在工具执行前阻断调用（四层纵深防御之执行安全）
      */
-    private boolean isToolCallBlocked(Agent agent, LLMPort.LLMDecision decision) {
-        return fireToolHook(HookPoint.BEFORE_TOOL_CALL, agent, decision.getToolName(),
-                String.valueOf(decision.getToolArguments())) != null;
+    private boolean isToolCallBlocked(Agent agent, ToolCall call) {
+        return fireToolHook(HookPoint.BEFORE_TOOL_CALL, agent, call.name(),
+                String.valueOf(call.arguments())) != null;
     }
 
     /**
      * [E] 工具执行 + 容错重试（T7）：失败按策略退避重试，重试耗尽后走降级话术。
      */
-    private ToolResult executeWithRetry(Agent agent, Tool tool, LLMPort.LLMDecision decision) {
+    private ToolResult executeWithRetry(Agent agent, Tool tool, ToolCall call) {
         RetryPolicy policy = retryPolicy != null ? retryPolicy : RetryPolicy.noRetry();
         ToolResult result = null;
         int attempt = 0;
         while (true) {
             attempt++;
-            result = executeOnce(agent, tool, decision);
+            result = executeOnce(agent, tool, call);
             if (result.isSuccess() || !policy.shouldRetry(attempt)) {
                 break;
             }
             policy.backoff(attempt);
         }
         if (!result.isSuccess() && fallbackStrategy != null) {
-            return ToolResult.failure(fallbackStrategy.onToolFailure(decision.getToolName(), result.getError()));
+            return ToolResult.failure(fallbackStrategy.onToolFailure(call.name(), result.getError()));
         }
         return result;
     }
 
-    private ToolResult executeOnce(Agent agent, Tool tool, LLMPort.LLMDecision decision) {
+    private ToolResult executeOnce(Agent agent, Tool tool, ToolCall call) {
         if (toolDispatcher != null) {
             // [T] 统一调度入口：白名单 → Schema → 动态权限 → 沙箱执行（§1.2 强制隔离）
-            return dispatchThroughToolCenter(agent, decision);
+            return dispatchThroughToolCenter(agent, call);
         }
         try {
-            return tool.execute(decision.getToolArguments());
+            return tool.execute(call.arguments());
         } catch (Exception e) {
             return ToolResult.failure("Tool execution error: " + e.getMessage());
         }
@@ -194,11 +218,10 @@ public class AgentDomainService {
     }
 
     private String lastUserMessage(Agent agent) {
-        List<Map<String, String>> history = agent.getConversationHistory();
-        for (int i = history.size() - 1; i >= 0; i--) {
-            Map<String, String> message = history.get(i);
-            if ("user".equals(message.get("role"))) {
-                return message.get("content");
+        List<SessionEvent> events = agent.getSessionEvents();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            if (events.get(i).type() == SessionEvent.Type.USER) {
+                return events.get(i).content();
             }
         }
         return "";
@@ -207,12 +230,12 @@ public class AgentDomainService {
     /**
      * [T] 经统一调度器执行工具调用：四层校验链 + 沙箱超时熔断（§1.2 模型与环境隔离）
      */
-    private ToolResult dispatchThroughToolCenter(Agent agent, LLMPort.LLMDecision decision) {
+    private ToolResult dispatchThroughToolCenter(Agent agent, ToolCall call) {
         ToolCallRequest request = ToolCallRequest.builder()
-                .toolId(decision.getToolName())
+                .toolId(call.name())
                 .caller(agent.getId().getValue())
                 .traceId(agent.getId().getValue())
-                .arguments(decision.getToolArguments())
+                .arguments(call.arguments())
                 .build();
         try {
             ToolCallResult callResult = toolDispatcher.dispatch(request);

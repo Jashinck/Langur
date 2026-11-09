@@ -5,6 +5,7 @@ import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentStatus;
 import org.skylark.langur.domain.model.tool.Tool;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.port.LLMPort;
 
 import java.util.List;
@@ -22,7 +23,7 @@ class StreamingAnswerTest {
         LLMPort port = new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> history, List<Tool> tools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> tools) {
                 return LLMDecision.finalAnswer("ignored");
             }
 

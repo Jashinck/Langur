@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
@@ -77,9 +77,9 @@ public class LlmGateway {
     }
 
     public LLMPort.LLMDecision decide(ModelRole role, String systemPrompt,
-                                      List<Map<String, String>> conversationHistory,
+                                      List<SessionEvent> sessionEvents,
                                       List<Tool> availableTools) {
-        return withFallback(role, model -> llmPort.decide(systemPrompt, model, conversationHistory, availableTools));
+        return withFallback(role, model -> llmPort.decide(systemPrompt, model, sessionEvents, availableTools));
     }
 
     public void streamComplete(ModelRole role, String systemPrompt, String userMessage, Consumer<String> tokenConsumer) {

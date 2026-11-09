@@ -18,6 +18,7 @@ import org.skylark.langur.domain.harness.workflow.WorkflowDefinition;
 import org.skylark.langur.domain.harness.workflow.WorkflowStage;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.port.DecisionPort;
 
@@ -281,10 +282,10 @@ class WorkflowExecutionLoopHybridTest {
         }
 
         private String lastUser(Agent agent) {
-            List<Map<String, String>> history = agent.getConversationHistory();
-            for (int i = history.size() - 1; i >= 0; i--) {
-                if ("user".equals(history.get(i).get("role"))) {
-                    String content = history.get(i).get("content");
+            List<SessionEvent> events = agent.getSessionEvents();
+            for (int i = events.size() - 1; i >= 0; i--) {
+                if (events.get(i).type() == SessionEvent.Type.USER) {
+                    String content = events.get(i).content();
                     int marker = content.indexOf("] ");
                     return content.startsWith("[工作流阶段") && marker > 0
                             ? content.substring(marker + 2) : content;

@@ -11,6 +11,7 @@ import org.skylark.langur.domain.harness.state.TaskState;
 import org.skylark.langur.domain.harness.state.TaskStateRepository;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
@@ -80,7 +81,7 @@ class ContextAssemblyLoopTest {
         LLMPort immediateAnswer = new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> conversationHistory, List<Tool> availableTools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> availableTools) {
                 return LLMDecision.finalAnswer("done");
             }
 

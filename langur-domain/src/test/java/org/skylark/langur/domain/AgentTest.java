@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentStatus;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.model.tool.ToolDefinition;
 import org.skylark.langur.domain.model.tool.ToolResult;
@@ -60,9 +61,9 @@ class AgentTest {
         agent.addUserMessage("Hello");
         agent.addAssistantMessage("Hi there!");
 
-        assertEquals(2, agent.getConversationHistory().size());
-        assertEquals("user", agent.getConversationHistory().get(0).get("role"));
-        assertEquals("assistant", agent.getConversationHistory().get(1).get("role"));
+        assertEquals(2, agent.getSessionEvents().size());
+        assertEquals(SessionEvent.Type.USER, agent.getSessionEvents().get(0).type());
+        assertEquals(SessionEvent.Type.ASSISTANT, agent.getSessionEvents().get(1).type());
     }
 
     @Test

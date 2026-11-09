@@ -2,6 +2,7 @@ package org.skylark.langur.infrastructure.harness.context.vector;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
@@ -36,7 +37,7 @@ class LlmEmbeddingPortTest {
     private LLMPort stubLlm() {
         return new LLMPort() {
             @Override
-            public LLMDecision decide(String s, String m, List<Map<String, String>> h, List<Tool> t) {
+            public LLMDecision decide(String s, String m, List<SessionEvent> h, List<Tool> t) {
                 return LLMDecision.finalAnswer("x");
             }
 

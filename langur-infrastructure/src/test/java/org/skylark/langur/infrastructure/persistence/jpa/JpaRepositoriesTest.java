@@ -7,6 +7,7 @@ import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
 import org.skylark.langur.domain.model.agent.AgentId;
 import org.skylark.langur.domain.model.agent.AgentStatus;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.execution.AgentRunTask;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.plan.PlanStep;
@@ -80,7 +81,7 @@ class JpaRepositoriesTest {
                         .build(),
                 AgentStatus.RUNNING,
                 List.of("http-call"),
-                List.of(Map.of("role", "user", "content", "hello")),
+                List.of(SessionEvent.user(0L, "hello")),
                 2,
                 "boom",
                 Instant.now(),
@@ -91,7 +92,7 @@ class JpaRepositoriesTest {
 
         assertEquals(agent.getConfig().getModel(), loaded.getConfig().getModel());
         assertEquals(List.of("http-call"), loaded.getRegisteredToolNames());
-        assertEquals("hello", loaded.getConversationHistory().get(0).get("content"));
+        assertEquals("hello", loaded.getSessionEvents().get(0).content());
         assertEquals("boom", loaded.getLastError());
     }
 

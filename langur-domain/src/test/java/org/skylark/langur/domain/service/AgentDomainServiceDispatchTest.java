@@ -6,6 +6,7 @@ import org.skylark.langur.domain.harness.tool.ToolCallResult;
 import org.skylark.langur.domain.harness.tool.ToolDispatcher;
 import org.skylark.langur.domain.model.agent.Agent;
 import org.skylark.langur.domain.model.agent.AgentConfig;
+import org.skylark.langur.domain.model.message.SessionEvent;
 import org.skylark.langur.domain.model.plan.Plan;
 import org.skylark.langur.domain.model.tool.Tool;
 import org.skylark.langur.domain.model.tool.ToolDefinition;
@@ -56,9 +57,9 @@ class AgentDomainServiceDispatchTest {
         service.executeReActStep(agent, plan);
 
         assertEquals(0, tool.executions.get());
-        Map<String, String> lastMessage = agent.getConversationHistory()
-                .get(agent.getConversationHistory().size() - 1);
-        assertTrue(lastMessage.get("content").contains("Error: Rejected"));
+        SessionEvent lastMessage = agent.getSessionEvents()
+                .get(agent.getSessionEvents().size() - 1);
+        assertTrue(lastMessage.content().contains("Error: Rejected"));
     }
 
     @Test
@@ -85,7 +86,7 @@ class AgentDomainServiceDispatchTest {
         return new LLMPort() {
             @Override
             public LLMDecision decide(String systemPrompt, String model,
-                                      List<Map<String, String>> conversationHistory, List<Tool> availableTools) {
+                                      List<SessionEvent> sessionEvents, List<Tool> availableTools) {
                 return LLMDecision.toolCall("try echo", "echo", Map.of("input", "hi"));
             }
 
