@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.skylark.langur</groupId>
+        <artifactId>langur</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>langur-server</artifactId>
+    <packaging>pom</packaging>
+
+    <name>Langur Server Aggregator</name>
+    <description>六 DDD 模块聚合器（Client C1 模块收敛）：物理下沉，包路径/依赖方向/ArchUnit 不变量不变</description>
+
+    <modules>
+        <module>langur-common</module>
+        <module>langur-domain</module>
+        <module>langur-application</module>
+        <module>langur-api</module>
+        <module>langur-infrastructure</module>
+        <module>langur-start</module>
+    </modules>
+</project>

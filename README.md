@@ -56,12 +56,13 @@
 
 ```
 langur/
-├── langur-common/           # 公共基础：SPI 契约（SecurityPolicySPI/DecisionEngineSPI 等）
-├── langur-domain/           # 领域层：六组件 + 决策平面值对象 + RSI 引擎（零外部依赖，P1）
-├── langur-application/      # 应用编排层：用例编排（AgentApplicationService 等）
-├── langur-api/              # 接口层：REST 控制器（/api/agents、/api/v1/agent、流式）
-├── langur-infrastructure/   # 基础设施层：LLM 网关、向量库、MCP/REST 工具、持久化、RSI 装配件
-└── langur-start/            # 启动装配层：Spring 配置、application.yml
+└── langur-server/             # Server 聚合器（Client C1 模块收敛）
+    ├── langur-common/         # 公共基础：SPI 契约（SecurityPolicySPI/DecisionEngineSPI 等）
+    ├── langur-domain/         # 领域层：六组件 + 决策平面值对象 + RSI 引擎（零外部依赖，P1）
+    ├── langur-application/    # 应用编排层：用例编排（AgentApplicationService 等）
+    ├── langur-api/            # 接口层：REST 控制器（/api/agents、/api/v1/agent、流式）
+    ├── langur-infrastructure/ # 基础设施层：LLM 网关、向量库、MCP/REST 工具、持久化、RSI 装配件
+    └── langur-start/          # 启动装配层：Spring 配置、application.yml
 ```
 
 ![DDD 六边形分层（6 Maven 模块）](doc/share/images/langur-ddd-hexagonal.png)
@@ -112,7 +113,7 @@ export JAVA_HOME=/path/to/jdk-17
 mvn clean test
 
 # 启动服务（默认 8081）
-java -jar langur-start/target/langur.jar
+java -jar langur-server/langur-start/target/langur.jar
 ```
 
 服务默认启动在 `http://localhost:8081`，健康检查 `/actuator/health`，指标 `/actuator/prometheus`。

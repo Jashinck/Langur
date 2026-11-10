@@ -157,8 +157,8 @@ cd langur-client                           npm run build
 npm install                                → langur-client/dist/
 npm run dev  (Vite :5173)                  mvn -pl langur-server package
   └ proxy /api → http://localhost:8081       └ maven-resources-plugin 把
-                                              ../langur-client/dist 复制进
-                                              langur-start/target/classes/static
+                                              ../../langur-client/dist 复制进
+                                              langur-server/langur-start/target/classes/static
                                              → java -jar langur-server/langur-start/target/langur.jar
                                              → 打开 http://localhost:8081 即工作台
 ```
@@ -352,7 +352,7 @@ POST /api/v1/agent/stream/chat（增强）
 
 ## 10. 验收标准（G-C1/G-C2/G-C3）
 
-- [ ] `git mv` 后 `mvn clean test`（JDK 17）全绿，`ArchitectureGuardTest` 通过，无路径/坐标残留。
+- [x] `git mv` 后 `mvn clean test`（JDK 17）全绿，`ArchitectureGuardTest` 通过，无路径/坐标残留。
 - [ ] `npm run build && mvn -pl langur-server package` 产出单 jar；`java -jar` 后 `curl :8081/` 返回 index.html，`/actuator/health` UP。
 - [ ] 浏览器打开 `http://localhost:8081`：新建 Agent → 选中 → 发消息 → 看到工具调用折叠卡（展开可见截断输出）→ 收到最终答案。
 - [ ] 断网/后端停止时页面不崩（错误条呈现），SSE 重连正常。
