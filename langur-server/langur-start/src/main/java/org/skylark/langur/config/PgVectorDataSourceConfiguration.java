@@ -2,7 +2,7 @@ package org.skylark.langur.config;
 
 import com.zaxxer.hikari.HikariDataSource;
 import org.skylark.langur.infrastructure.harness.context.vector.VectorProperties;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;

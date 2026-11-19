@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.skylark.langur.domain.harness.context.vector.EmbeddingPort;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.skylark.langur.infrastructure.llm.LlmGateway;
 import org.skylark.langur.infrastructure.llm.ModelRole;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;

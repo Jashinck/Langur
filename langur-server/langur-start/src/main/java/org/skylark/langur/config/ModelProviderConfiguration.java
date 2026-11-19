@@ -1,7 +1,7 @@
 package org.skylark.langur.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.skylark.langur.infrastructure.llm.ModelProviderFactory;
 import org.skylark.langur.infrastructure.llm.ModelRoutableLLMPort;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;

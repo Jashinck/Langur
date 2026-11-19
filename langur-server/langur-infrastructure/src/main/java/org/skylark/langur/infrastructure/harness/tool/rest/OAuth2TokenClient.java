@@ -12,7 +12,7 @@ public interface OAuth2TokenClient {
      *
      * @param tokenUrl     令牌端点
      * @param clientId     客户端 ID
-     * @param clientSecret 客户端密钥（已由 {@link SecretResolver} 解析为明文）
+     * @param clientSecret 客户端密钥（已由 {@link org.skylark.langur.common.spi.SecretResolver} 解析为明文）
      * @param scope        可选 scope（空格分隔，可为 null）
      * @return 访问令牌及有效期
      */

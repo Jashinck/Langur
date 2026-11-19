@@ -1,5 +1,7 @@
 package org.skylark.langur.infrastructure.harness.tool.rest;
 
+import org.skylark.langur.common.spi.SecretResolver;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;

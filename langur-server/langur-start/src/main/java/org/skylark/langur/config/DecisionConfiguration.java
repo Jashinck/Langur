@@ -14,7 +14,7 @@ import org.skylark.langur.infrastructure.harness.decision.RecordingDecisionPort;
 import org.skylark.langur.infrastructure.harness.decision.RuleFallbackDecisionAdapter;
 import org.skylark.langur.infrastructure.harness.decision.ThresholdRouter;
 import org.skylark.langur.infrastructure.harness.decision.TypeSafeDecisionAdapter;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;

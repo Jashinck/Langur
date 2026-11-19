@@ -1,4 +1,4 @@
-package org.skylark.langur.infrastructure.harness.tool.rest;
+package org.skylark.langur.common.spi;
 
 import java.util.Optional;
 

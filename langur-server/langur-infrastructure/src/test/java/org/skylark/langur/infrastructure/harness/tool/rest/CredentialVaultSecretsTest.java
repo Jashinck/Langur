@@ -7,7 +7,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * H7 验收：{@link InMemoryCredentialVault} 经 {@link SecretResolver} 解析 env/prop/kms 引用（明文不落配置/日志），
+ * H7 验收：{@link InMemoryCredentialVault} 经 {@link org.skylark.langur.common.spi.SecretResolver} 解析 env/prop/kms 引用（明文不落配置/日志），
  * OAUTH2 凭证经 {@link OAuth2TokenManager} 换取 Bearer 令牌；KMS 缺失却用 kms: 引用时 fail-closed；密钥不泄露于 toString。
  */
 class CredentialVaultSecretsTest {

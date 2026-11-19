@@ -3,7 +3,7 @@ package org.skylark.langur.config;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.skylark.langur.infrastructure.harness.context.vector.VectorProperties;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 

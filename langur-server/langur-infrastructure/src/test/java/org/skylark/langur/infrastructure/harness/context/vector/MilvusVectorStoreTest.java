@@ -10,7 +10,7 @@ import org.skylark.langur.domain.harness.context.vector.HybridQuery;
 import org.skylark.langur.domain.harness.context.vector.SearchFilter;
 import org.skylark.langur.domain.harness.context.vector.SearchQuery;
 import org.skylark.langur.domain.harness.context.vector.VectorRecord;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.skylark.langur.infrastructure.harness.tool.rest.SsrfGuard;
 
 import java.io.IOException;

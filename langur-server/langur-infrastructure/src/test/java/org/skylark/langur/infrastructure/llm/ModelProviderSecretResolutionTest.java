@@ -10,7 +10,7 @@ import org.skylark.langur.domain.port.LLMPort;
 import org.skylark.langur.infrastructure.harness.context.vector.EmbeddingProperties;
 import org.skylark.langur.infrastructure.harness.context.vector.LlmEmbeddingPort;
 import org.skylark.langur.infrastructure.harness.tool.rest.CompositeSecretResolver;
-import org.skylark.langur.infrastructure.harness.tool.rest.SecretResolver;
+import org.skylark.langur.common.spi.SecretResolver;
 import org.skylark.langur.infrastructure.llm.config.LlmProperties;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ObjectProvider;
