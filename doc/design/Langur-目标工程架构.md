@@ -165,8 +165,8 @@ langur-llm/
 | 阶段 | 动作 | 验收 | 状态 |
 |---|---|---|---|
 | **P0 地基** | 包内分层 + ArchUnit + 依赖图；C1 模块收敛（六模块入 langur-server） | 全量测试绿、ArchUnit 绿 | ✅ C1 已完成 |
-| **P1 移类** | `SecretResolver` 移 common（解 llm↔tool 环） | 全量测试绿 | 🔜 |
-| **P2 拆 llm** | `langur-llm` 先拆（内部扇出最多） | start 能跑、测试绿 | 🔜 |
+| **P1 移类** | `SecretResolver` 移 common（解 llm↔tool 环） | 全量测试绿 | ✅ 已完成（81558b9） |
+| **P2 拆 llm** | `langur-llm` 先拆（内部扇出最多） | start 能跑、测试绿 | ✅ 已完成（0169ce3） |
 | **P3 拆共享索引** | `langur-vector` → `skylark-index`（**跨项目共享需求驱动**，与 BlueWhale 对齐） | 两项目共用、无双写 | 🔜 |
 | **P4 按需拆其余** | tools/persistence/security/observability/decision/rsi 按需拆，**不一次拆完**；其余先保持包内分层 + ArchUnit | 每拆一个跑全量测试 | 🔜 |
 | **P5 交付配套** | `langur-bom` + `langur-sdk` + `langur-starter` + auto-config + 依赖图 CI | ArchUnit 绿、package 绿 | 🔜 |
