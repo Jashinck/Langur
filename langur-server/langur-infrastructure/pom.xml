@@ -18,6 +18,11 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-domain</artifactId>
         </dependency>
+        <!-- jar 化 P2：llm 适配器已独立成 jar，infra 内 vector/rsi/execution/skill 仍依赖它 -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-llm</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>

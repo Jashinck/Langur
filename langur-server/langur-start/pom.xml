@@ -22,6 +22,11 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-infrastructure</artifactId>
         </dependency>
+        <!-- jar 化 P2：start 装配点直接依赖 llm 适配器 jar（ModelProviderConfiguration） -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-llm</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>

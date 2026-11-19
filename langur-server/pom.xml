@@ -16,13 +16,14 @@
     <packaging>pom</packaging>
 
     <name>Langur Server Aggregator</name>
-    <description>六 DDD 模块聚合器（Client C1 模块收敛）：物理下沉，包路径/依赖方向/ArchUnit 不变量不变</description>
+    <description>DDD 模块 + 能力适配器聚合器（Client C1 收敛 + jar 化 P2 起）：物理下沉/拆分，包路径/依赖方向/ArchUnit 不变量不变</description>
 
     <modules>
         <module>langur-common</module>
         <module>langur-domain</module>
         <module>langur-application</module>
         <module>langur-api</module>
+        <module>langur-llm</module>
         <module>langur-infrastructure</module>
         <module>langur-start</module>
     </modules>
