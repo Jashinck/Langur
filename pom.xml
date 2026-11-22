@@ -84,6 +84,11 @@
             </dependency>
             <dependency>
                 <groupId>org.skylark.langur</groupId>
+                <artifactId>langur-decision</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.skylark.langur</groupId>
                 <artifactId>langur-infrastructure</artifactId>
                 <version>${project.version}</version>
             </dependency>

@@ -9,13 +9,14 @@ import org.skylark.langur.domain.harness.decision.DecisionRequest;
 import org.skylark.langur.domain.harness.decision.DecisionResponse;
 import org.skylark.langur.domain.port.DecisionPort;
 import org.skylark.langur.domain.port.LLMPort;
-import org.skylark.langur.infrastructure.cache.MemoryCacheBackend;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -23,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * J3 验收 - {@link CachingDecisionPort} 离线确定性单测（纯 JUnit5 + H4 {@link MemoryCacheBackend}）。
+ * J3 验收 - {@link CachingDecisionPort} 离线确定性单测（纯 JUnit5 + 测试内内存 CacheBackend 桩）。
  * <p>覆盖：命中缓存不重复调后端、命中返回空计量（无新增成本）、不同 state 分别回源、
  * 关闭/无问题透传、缓存异常静默降级委派后端（P10）、缓存键含 state+问题签名。</p>
  */
@@ -44,6 +45,37 @@ class CachingDecisionPortTest {
         }
     }
 
+    /** 测试内内存缓存桩：替代 infra MemoryCacheBackend，使 decision 适配器只依赖内核（jar 化 P4）。 */
+    private static final class InMemoryTestCache implements CacheBackend {
+        private final ConcurrentHashMap<String, String> store = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, AtomicLong> counters = new ConcurrentHashMap<>();
+
+        @Override
+        public long increment(String key, Duration ttl) {
+            return counters.computeIfAbsent(key, k -> new AtomicLong()).incrementAndGet();
+        }
+
+        @Override
+        public boolean setIfAbsent(String key, String value, Duration ttl) {
+            return store.putIfAbsent(key, value) == null;
+        }
+
+        @Override
+        public Optional<String> get(String key) {
+            return Optional.ofNullable(store.get(key));
+        }
+
+        @Override
+        public void put(String key, String value, Duration ttl) {
+            store.put(key, value);
+        }
+
+        @Override
+        public void evict(String key) {
+            store.remove(key);
+        }
+    }
+
     private static DecisionRequest request(String state) {
         return DecisionRequest.of(state, "jev-1.13.0", List.of(
                 DecisionQuestion.choice("route", "选择范式", Map.of("react", "简单", "plan", "复杂"))));
@@ -56,7 +88,7 @@ class CachingDecisionPortTest {
     @Test
     void shouldServeSecondIdenticalRequestFromCacheWithoutBackendCall() {
         CountingBackend backend = new CountingBackend();
-        CachingDecisionPort port = newPort(backend, new MemoryCacheBackend(), true);
+        CachingDecisionPort port = newPort(backend, new InMemoryTestCache(), true);
 
         DecisionResponse first = port.decide(request("合同正文"));
         DecisionResponse second = port.decide(request("合同正文"));
@@ -71,7 +103,7 @@ class CachingDecisionPortTest {
     @Test
     void shouldCallBackendForEachDistinctState() {
         CountingBackend backend = new CountingBackend();
-        CachingDecisionPort port = newPort(backend, new MemoryCacheBackend(), true);
+        CachingDecisionPort port = newPort(backend, new InMemoryTestCache(), true);
 
         port.decide(request("state-A"));
         port.decide(request("state-B"));
@@ -82,7 +114,7 @@ class CachingDecisionPortTest {
     @Test
     void shouldBypassCacheWhenDisabled() {
         CountingBackend backend = new CountingBackend();
-        CachingDecisionPort port = newPort(backend, new MemoryCacheBackend(), false);
+        CachingDecisionPort port = newPort(backend, new InMemoryTestCache(), false);
 
         port.decide(request("同一 state"));
         port.decide(request("同一 state"));
@@ -93,7 +125,7 @@ class CachingDecisionPortTest {
     @Test
     void shouldBypassCacheWhenNoQuestions() {
         CountingBackend backend = new CountingBackend();
-        CachingDecisionPort port = newPort(backend, new MemoryCacheBackend(), true);
+        CachingDecisionPort port = newPort(backend, new InMemoryTestCache(), true);
 
         port.decide(DecisionRequest.of("state"));
 
@@ -141,7 +173,7 @@ class CachingDecisionPortTest {
     @Test
     void shouldExposeDelegateAndStableCacheKey() {
         CountingBackend backend = new CountingBackend();
-        CachingDecisionPort port = newPort(backend, new MemoryCacheBackend(), true);
+        CachingDecisionPort port = newPort(backend, new InMemoryTestCache(), true);
 
         assertSame(backend, port.getDelegate());
         assertEquals(port.cacheKey(request("s")), port.cacheKey(request("s")), "相同请求缓存键稳定");

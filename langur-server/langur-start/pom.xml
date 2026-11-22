@@ -37,6 +37,11 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-security</artifactId>
         </dependency>
+        <!-- jar 化 P4：start 装配点直接依赖 decision 适配器 jar（DecisionConfiguration/HarnessConfiguration） -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-decision</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>

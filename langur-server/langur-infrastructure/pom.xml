@@ -23,12 +23,6 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-llm</artifactId>
         </dependency>
-        <!-- jar 化 P4（临时）：decision 测试用 observability 的 MicrometerEvaluationService；decision 拆出后移除 -->
-        <dependency>
-            <groupId>org.skylark.langur</groupId>
-            <artifactId>langur-observability</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!-- jar 化 P4：tool/validator 的 CriticalApprovalValidatorTest 用 security 的 InMemoryApprovalStore -->
         <dependency>
             <groupId>org.skylark.langur</groupId>
