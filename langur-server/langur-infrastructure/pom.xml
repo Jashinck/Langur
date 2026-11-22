@@ -29,6 +29,12 @@
             <artifactId>langur-observability</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- jar 化 P4：tool/validator 的 CriticalApprovalValidatorTest 用 security 的 InMemoryApprovalStore -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-security</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>

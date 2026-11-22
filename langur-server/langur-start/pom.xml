@@ -32,6 +32,11 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-observability</artifactId>
         </dependency>
+        <!-- jar 化 P4：start 装配点直接依赖 security 适配器 jar（审批/注入守卫/内容审查 Bean 组件扫描） -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-security</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>

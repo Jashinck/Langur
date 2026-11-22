@@ -25,6 +25,7 @@
         <module>langur-api</module>
         <module>langur-llm</module>
         <module>langur-observability</module>
+        <module>langur-security</module>
         <module>langur-infrastructure</module>
         <module>langur-start</module>
     </modules>
