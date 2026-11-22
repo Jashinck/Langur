@@ -27,6 +27,11 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-llm</artifactId>
         </dependency>
+        <!-- jar 化 P4：start 装配点直接依赖 observability 适配器 jar（ObservabilityConfiguration + 组件扫描） -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-observability</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>

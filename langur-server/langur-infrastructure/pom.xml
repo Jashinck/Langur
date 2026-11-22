@@ -23,6 +23,12 @@
             <groupId>org.skylark.langur</groupId>
             <artifactId>langur-llm</artifactId>
         </dependency>
+        <!-- jar 化 P4（临时）：decision 测试用 observability 的 MicrometerEvaluationService；decision 拆出后移除 -->
+        <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-observability</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
