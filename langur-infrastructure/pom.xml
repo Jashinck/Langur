@@ -8,7 +8,7 @@
         <groupId>org.skylark.langur</groupId>
         <artifactId>langur</artifactId>
         <version>1.0.0</version>
-        <relativePath>../../pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>langur-infrastructure</artifactId>
     <name>Langur Infrastructure</name>

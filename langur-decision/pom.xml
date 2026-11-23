@@ -5,11 +5,11 @@
         <groupId>org.skylark.langur</groupId>
         <artifactId>langur</artifactId>
         <version>1.0.0</version>
-        <relativePath>../../pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
-    <artifactId>langur-observability</artifactId>
-    <name>Langur Observability Adapter</name>
-    <description>能力适配器 jar（jar 化 P4）：可观测/成本——四维指标 Micrometer + 告警 + 审计 + OTel tracing。包名 org.skylark.langur.infrastructure.harness.evaluation 不变，只依赖内核 domain。</description>
+    <artifactId>langur-decision</artifactId>
+    <name>Langur Decision Adapter</name>
+    <description>能力适配器 jar（jar 化 P4）：Jev 决策平面后端——TypeSafeDecisionAdapter + 装饰链（缓存/数据驻留/记录/阈值路由/规则兜底），恒 advisory、只收紧不放松（P12）。包名 org.skylark.langur.infrastructure.harness.decision 不变，只依赖内核 domain/common。</description>
 
     <dependencies>
         <dependency>
@@ -17,20 +17,20 @@
             <artifactId>langur-domain</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-api</artifactId>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-common</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -43,13 +43,14 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk</artifactId>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- decision 测试用 MicrometerEvaluationService/AuditSink 做断言 -->
         <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-observability</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

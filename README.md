@@ -52,22 +52,26 @@
 - **V（Evaluation）**：五维指标上报 + 审计留痕
 - **决策平面**：J1–J10 落地，对安全/审批闸门恒 advisory、只收紧不放松（P12）
 
-### DDD 六边形分层（6 Maven 模块）
+### 工程模块（平铺：3 内核 + 能力适配器 + 接入）
 
 ```
 langur/
-└── langur-server/             # Server 聚合器（Client C1 模块收敛）
-    ├── langur-common/         # 公共基础：SPI 契约（SecurityPolicySPI/DecisionEngineSPI 等）
-    ├── langur-domain/         # 领域层：六组件 + 决策平面值对象 + RSI 引擎（零外部依赖，P1）
-    ├── langur-application/    # 应用编排层：用例编排（AgentApplicationService 等）
-    ├── langur-api/            # 接口层：REST 控制器（/api/agents、/api/v1/agent、流式）
-    ├── langur-infrastructure/ # 基础设施层：LLM 网关、向量库、MCP/REST 工具、持久化、RSI 装配件
-    └── langur-start/          # 启动装配层：Spring 配置、application.yml
+├── langur-common/         # 内核：SPI 契约 + Cache/Lock + 异常 + SecretResolver
+├── langur-domain/         # 内核：六组件 + Jev 值对象 + RSI 引擎 + 全部端口（零外部依赖，P1）
+├── langur-application/    # 内核：用例编排（AgentApplicationService 等）
+├── langur-llm/            # 适配器：Provider 网关 / 路由 / 熔断 / 多厂商
+├── langur-decision/       # 适配器：Jev 决策后端 + 装饰链（恒 advisory，P12）
+├── langur-security/       # 适配器：审批 / 注入守卫 / 内容审查
+├── langur-observability/  # 适配器：四维指标 / 告警 / 审计 / tracing
+├── langur-infrastructure/ # 适配器（待拆）：工具 / 向量 / 持久化 / RSI 装配件
+├── langur-api/            # 接入：REST 控制器（/api/agents、/api/v1/agent、流式）+ 治理
+├── langur-start/          # 接入：Spring 装配 + application.yml（boot jar）
+└── langur-client/         # 接入：React 工作台（Vite + TS，非 Maven 模块）
 ```
 
-![DDD 六边形分层（6 Maven 模块）](doc/share/images/langur-ddd-hexagonal.png)
+![DDD 六边形分层](doc/share/images/langur-ddd-hexagonal.png)
 
-依赖方向（P2 单向无环）：`start → api → application → domain ← infrastructure`；`domain` 不 import Spring/infrastructure（ArchUnit 守护）。
+依赖方向（P2 单向无环）：`start → api → application → domain ← 适配器 jar（llm/decision/security/observability/infrastructure）`；适配器只依赖内核，`domain` 不 import Spring/适配器（ArchUnit 守护）。模块全部平铺于根目录，内核/适配器/接入仅为逻辑分层（见 [目标工程架构](doc/design/Langur-目标工程架构.md)）。
 
 ### 决策平面（System-1 判定层）
 
@@ -105,7 +109,7 @@ langur/
 ### 构建 & 运行
 
 ```bash
-# 完整构建（6 模块）
+# 完整构建（10 Maven 模块）
 mvn clean package -DskipTests
 
 # 运行完整测试套件（JDK 17）
@@ -113,7 +117,7 @@ export JAVA_HOME=/path/to/jdk-17
 mvn clean test
 
 # 启动服务（默认 8081）
-java -jar langur-server/langur-start/target/langur.jar
+java -jar langur-start/target/langur.jar
 ```
 
 服务默认启动在 `http://localhost:8081`，健康检查 `/actuator/health`，指标 `/actuator/prometheus`。

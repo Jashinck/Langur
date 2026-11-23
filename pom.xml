@@ -21,7 +21,16 @@
     <description>叶猴 - 通用Agent能力框架，支持ReAct、工具调用、多步规划与多Agent协作</description>
 
     <modules>
-        <module>langur-server</module>
+        <module>langur-common</module>
+        <module>langur-domain</module>
+        <module>langur-application</module>
+        <module>langur-api</module>
+        <module>langur-llm</module>
+        <module>langur-observability</module>
+        <module>langur-security</module>
+        <module>langur-decision</module>
+        <module>langur-infrastructure</module>
+        <module>langur-start</module>
     </modules>
 
     <properties>

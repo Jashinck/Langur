@@ -8,10 +8,11 @@
         <groupId>org.skylark.langur</groupId>
         <artifactId>langur</artifactId>
         <version>1.0.0</version>
-        <relativePath>../../pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
-    <artifactId>langur-application</artifactId>
-    <name>Langur Application</name>
+    <artifactId>langur-llm</artifactId>
+    <name>Langur LLM Adapter</name>
+    <description>能力适配器 jar（jar 化 P2）：Provider 网关 / 路由 / 熔断 / 多厂商适配器。包名 org.skylark.langur.infrastructure.llm 不变，只依赖内核（domain/common），被 infra 与 start 依赖。</description>
 
     <dependencies>
         <dependency>
@@ -19,12 +20,24 @@
             <artifactId>langur-domain</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.skylark.langur</groupId>
+            <artifactId>langur-common</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

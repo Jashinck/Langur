@@ -318,10 +318,10 @@ my-agent-app/
 mvn -q clean package
 
 # 架构守卫（现有四条不变量）
-mvn -pl langur-server/langur-start -Dtest=ArchitectureGuardTest test
+mvn -pl langur-start -Dtest=ArchitectureGuardTest test
 
 # 领域层零 Spring（应无输出）
-grep -r "org.springframework" langur-server/langur-domain/src/main/java || true
+grep -r "org.springframework" langur-domain/src/main/java || true
 ```
 
 拆包后新增/保持的不变量：
