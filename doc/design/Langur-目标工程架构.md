@@ -164,7 +164,7 @@ langur-llm/
 
 | 阶段 | 动作 | 验收 | 状态 |
 |---|---|---|---|
-| **P0 地基** | 包内分层 + ArchUnit + 依赖图；C1 模块收敛（六模块入 langur-server） | 全量测试绿、ArchUnit 绿 | ✅ C1 已完成 |
+| **P0 地基** | 包内分层 + ArchUnit + 依赖图；C1 曾收敛入 langur-server，**后打散平铺至根目录**（2026-11-23，58d94bd） | 全量测试绿、ArchUnit 绿 | ✅ 已完成（平铺） |
 | **P1 移类** | `SecretResolver` 移 common（解 llm↔tool 环） | 全量测试绿 | ✅ 已完成（81558b9） |
 | **P2 拆 llm** | `langur-llm` 先拆（内部扇出最多） | start 能跑、测试绿 | ✅ 已完成（0169ce3） |
 | **P3 拆共享索引** | `langur-vector` → `skylark-index`（**跨项目共享需求驱动**，与 BlueWhale 对齐） | 两项目共用、无双写 | ⏸ 暂缓（2026-11-23 决策：按需再建；skylark-index 尚未存在） |
@@ -175,6 +175,8 @@ langur-llm/
 | **H15 并行** | H15.4 workspace / H15.5 sandbox 成熟后独立成 `langur-workspace`/`langur-sandbox` | 可插拔工程层 | 部分已落地 |
 
 > 关键纪律（BlueWhale）：结构性共享库（skylark-index）优先真拆；其余适配器可先包内分层 + ArchUnit 守卫，按需再 Maven 化。llm 按内部扇出先拆，vector 按外部共享先拆。
+>
+> **物理布局（2026-11-23 决策）**：全部模块平铺于根目录、与 `langur-client` 平级，root pom 直接聚合；解散 `langur-server` 聚合器，去掉 client/server 物理两桶（回退 C1 嵌套）。§2 的三层为逻辑视图，非物理嵌套。infra 单体暂留，按需再拆。
 
 ---
 
